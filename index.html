@@ -1,317 +1,775 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from groq import Groq
-import json, httpx, re
-from pathlib import Path
-from datetime import datetime
-import uvicorn
-from dotenv import load_dotenv
-import os
-load_dotenv()
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chotu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#111d2e;
+  --border:rgba(240,237,230,0.08);--border-hi:rgba(240,237,230,0.18);
+  --accent:#00c8ff;--accent2:#0066ff;--warn:#ff6b35;--green:#22c55e;
+  --purple:#a78bfa;--text:#c9d1d9;--text-dim:#4a5568;--text-hi:#e6edf3;
+  --gold:#00c8ff;--topbar-bg:#0d1117;--topbar-border:#1a2332;
+  --sidebar-bg:#0d1117;--sidebar-border:#1a2332;
+  --logo-color:#00c8ff;--logo-shadow:none;
+  --logo-font:'Share Tech Mono',monospace;--logo-size:20px;--logo-spacing:5px;
+  --btn-font:'Rajdhani',sans-serif;--btn-size:13px;--btn-spacing:1px;
+  --section-font:'Share Tech Mono',monospace;--section-size:10px;
+  --section-color:#4a5568;--section-spacing:3px;
+  --timer-font:'Share Tech Mono',monospace;--timer-size:22px;
+  --send-bg:rgba(0,200,255,0.08);--send-border:#00c8ff;--send-color:#00c8ff;
+  --send-font:'Share Tech Mono',monospace;--send-size:12px;--send-spacing:2px;
+  --msg-border-a:rgba(0,200,255,0.15);--msg-bg-a:#0d1117;
+  --msg-border-u:rgba(0,102,255,0.25);--msg-bg-u:rgba(0,102,255,0.06);
+  --avatar-bg-a:rgba(0,200,255,0.08);--avatar-bd-a:#00c8ff;--avatar-cl-a:#00c8ff;
+  --avatar-bg-u:rgba(0,102,255,0.08);--avatar-bd-u:#0066ff;--avatar-cl-u:#0066ff;
+  --focus-border:#243447;--focus-active:#00c8ff;--focus-shadow:rgba(0,200,255,0.09);
+  --task-color:#00c8ff;--name-a:#00c8ff;--name-u:#a78bfa;
+  --modal-border:#243447;--modal-shadow:rgba(0,200,255,0.1);
+  --field-color:#4a5568;--profile-color:#22c55e;--profile-bd:rgba(34,197,94,0.3);
+  --note-color:#4a5568;--mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+  --comic:'Share Tech Mono',monospace;--web-pattern:none;--web-overlay:none;
+  --sidebar-stripe:none;--modal-stripe:none;--topbar-stripe:none;
+  --focus-btn-bg:#243447;--topbar-border-size:1px;--sidebar-border-size:1px;
+  --modal-box-shadow:0 0 60px rgba(0,200,255,0.1);--btn-radius:4px;
+  --search-hint-bg:rgba(167,139,250,0.05);--search-hint-bd:rgba(167,139,250,0.15);
+  --search-title:#a78bfa;--focus-banner-bg:rgba(0,200,255,0.04);
+  --focus-banner-bd:rgba(0,200,255,0.2);--focus-banner-cl:#00c8ff;
+  --idle-bg:rgba(255,107,53,0.08);--idle-bd:#ff6b35;--idle-cl:#ff6b35;
+}
+[data-theme="spidey"]{
+  --bg:#0E1628;--surface:#111D35;--surface2:#162040;
+  --border:rgba(240,237,230,0.10);--border-hi:rgba(240,237,230,0.22);
+  --accent:#E01020;--accent2:#1A2F6E;--warn:#F5C842;--green:#F5C842;
+  --purple:#F5C842;--text:#F0EDE6;--text-dim:rgba(240,237,230,0.45);
+  --text-hi:#F0EDE6;--gold:#F5C842;--topbar-bg:#1A2F6E;--topbar-border:#E01020;
+  --sidebar-bg:#111D35;--sidebar-border:#9B0A18;
+  --logo-color:#F0EDE6;--logo-shadow:3px 3px 0 #9B0A18,-1px -1px 0 rgba(0,0,0,0.5);
+  --logo-font:'Bangers',cursive;--logo-size:30px;--logo-spacing:3px;
+  --btn-font:'Bangers',cursive;--btn-size:15px;--btn-spacing:2px;
+  --section-font:'Bangers',cursive;--section-size:14px;
+  --section-color:#E01020;--section-spacing:2px;
+  --timer-font:'Bangers',cursive;--timer-size:28px;
+  --send-bg:#E01020;--send-border:#9B0A18;--send-color:#F0EDE6;
+  --send-font:'Bangers',cursive;--send-size:16px;--send-spacing:2px;
+  --msg-border-a:rgba(224,16,32,0.3);--msg-bg-a:linear-gradient(135deg,#111D35 0%,rgba(224,16,32,0.05) 100%);
+  --msg-border-u:rgba(46,79,187,0.4);--msg-bg-u:linear-gradient(135deg,#111D35 0%,rgba(26,47,110,0.3) 100%);
+  --avatar-bg-a:#E01020;--avatar-bd-a:#9B0A18;--avatar-cl-a:#F0EDE6;
+  --avatar-bg-u:#223A8A;--avatar-bd-u:#2E4FBB;--avatar-cl-u:#F0EDE6;
+  --focus-border:#2E4FBB;--focus-active:#E01020;--focus-shadow:rgba(224,16,32,0.2);
+  --task-color:#F5C842;--name-a:#E01020;--name-u:#F5C842;
+  --modal-border:#E01020;--modal-shadow:rgba(224,16,32,0.2);
+  --field-color:#F5C842;--profile-color:#F5C842;--profile-bd:rgba(245,200,66,0.3);
+  --note-color:rgba(240,237,230,0.45);
+  --web-pattern:radial-gradient(circle at center,transparent 30%,rgba(224,16,32,0.03) 31%,transparent 32%),repeating-conic-gradient(rgba(224,16,32,0.04) 0deg,transparent 1deg,transparent 14deg,rgba(224,16,32,0.04) 15deg);
+  --web-overlay:radial-gradient(ellipse at top,rgba(26,47,110,0.3) 0%,transparent 60%),radial-gradient(ellipse at bottom,rgba(224,16,32,0.1) 0%,transparent 50%);
+  --sidebar-stripe:repeating-linear-gradient(135deg,transparent,transparent 10px,rgba(224,16,32,0.02) 10px,rgba(224,16,32,0.02) 11px);
+  --modal-stripe:repeating-linear-gradient(135deg,transparent,transparent 10px,rgba(224,16,32,0.02) 10px,rgba(224,16,32,0.02) 11px);
+  --topbar-stripe:repeating-linear-gradient(90deg,transparent,transparent 18px,rgba(255,255,255,0.03) 18px,rgba(255,255,255,0.03) 19px);
+  --focus-btn-bg:rgba(224,16,32,0.15);--topbar-border-size:3px;--sidebar-border-size:2px;
+  --modal-box-shadow:4px 4px 0 #9B0A18,8px 8px 0 rgba(0,0,0,0.3);--btn-radius:4px;
+  --search-hint-bg:rgba(245,200,66,0.05);--search-hint-bd:rgba(245,200,66,0.2);
+  --search-title:#F5C842;--focus-banner-bg:rgba(224,16,32,0.1);
+  --focus-banner-bd:rgba(224,16,32,0.4);--focus-banner-cl:#E01020;
+  --idle-bg:rgba(245,200,66,0.08);--idle-bd:#F5C842;--idle-cl:#F5C842;
+}
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_KEY   = os.getenv("TAVILY_KEY")
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;transition:background .3s,color .3s;}
+body::before{content:'';position:fixed;inset:0;background-image:var(--web-pattern);background-size:60px 60px,60px 60px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;inset:0;background:var(--web-overlay);pointer-events:none;z-index:0;}
+[data-theme="default"] body::before{background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,200,255,0.012) 2px,rgba(0,200,255,0.012) 4px);background-size:auto;}
 
-app = FastAPI()
+.shell{display:grid;grid-template-columns:270px 1fr;grid-template-rows:64px 1fr;height:100vh;position:relative;z-index:1;}
 
-# ── Config ────────────────────────────────────────────────────────────────────
-GROQ_API_KEY  = GROQ_API_KEY
-TAVILY_KEY    = TAVILY_KEY
+/* topbar */
+.topbar{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--topbar-bg);border-bottom:var(--topbar-border-size) solid var(--topbar-border);position:relative;overflow:visible;transition:background .3s,border-color .3s;}
+.topbar::before{content:'';position:absolute;inset:0;background:var(--topbar-stripe);pointer-events:none;}
+.spider-icon{display:none;}
+[data-theme="spidey"] .spider-icon{display:block;}
+.spider-icon svg{width:32px;height:32px;}
+.logo{font-family:var(--logo-font);font-size:var(--logo-size);color:var(--logo-color);letter-spacing:var(--logo-spacing);text-shadow:var(--logo-shadow);position:relative;z-index:1;line-height:1;transition:all .3s;}
+.logo-sub{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-left:2px;transition:color .3s;}
+[data-theme="spidey"] .logo-sub{color:#F5C842;letter-spacing:1px;font-size:8px;}
+.logo-wrap{display:flex;flex-direction:column;justify-content:center;gap:2px;}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;position:relative;z-index:1;flex-wrap:nowrap;}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.status-txt{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;white-space:nowrap;}
 
-DATA_FILE    = Path("chotu_memory.json")
-PROFILE_FILE = Path("chotu_profile.json")
-CLIENT       = Groq(api_key=GROQ_API_KEY)
-MODEL        = "llama-3.3-70b-versatile"
+/* theme dropdown */
+.theme-dropdown{position:relative;z-index:10;}
+.theme-btn{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:3px;border:1px solid var(--border-hi);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.theme-btn:hover{border-color:var(--accent);color:var(--text-hi);}
+.theme-arrow{font-size:8px;transition:transform .15s;}
+.theme-dropdown.open .theme-arrow{transform:rotate(180deg);}
+.theme-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;overflow:hidden;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:9999;}
+.theme-dropdown.open .theme-menu{display:block;}
+.theme-option{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;}
+.theme-option:last-child{border-bottom:none;}
+.theme-option:hover{background:var(--surface2);color:var(--text-hi);}
+.theme-option.active{color:var(--accent);}
+.theme-swatch{width:16px;height:16px;border-radius:3px;border:1px solid rgba(255,255,255,0.2);flex-shrink:0;}
+.swatch-default{background:linear-gradient(135deg,#080c10 50%,#00c8ff 50%);}
+.swatch-spidey{background:linear-gradient(135deg,#E01020 50%,#1A2F6E 50%);}
 
-SYSTEM_PROMPT = """You are Chotu — the user's sharp, slightly chaotic best friend who also happens to be extremely competent.
+.topbar-badge{font-family:var(--mono);font-size:10px;padding:4px 9px;border-radius:3px;border:1px solid;cursor:pointer;transition:all .15s;letter-spacing:1px;white-space:nowrap;}
+.search-badge{border-color:rgba(167,139,250,.3);color:rgba(167,139,250,.6);}
+[data-theme="spidey"] .search-badge{border-color:rgba(245,200,66,.3);color:rgba(245,200,66,.6);}
+.search-badge.active{border-color:var(--purple);color:var(--purple);animation:pulse .8s infinite;}
+[data-theme="spidey"] .search-badge.active{border-color:#F5C842;color:#F5C842;}
+.profile-badge{border-color:var(--border-hi);color:var(--text-dim);}
+.profile-badge.set{border-color:var(--green);color:var(--green);}
+.profile-badge:hover{border-color:var(--accent);color:var(--text-hi);}
+.tts-badge{border-color:var(--border-hi);color:var(--text-dim);}
+.tts-badge.on{border-color:var(--accent);color:var(--accent);}
+.notes-badge{border-color:var(--border-hi);color:var(--text-dim);}
+.notes-badge:hover{border-color:var(--accent);color:var(--text-hi);}
 
-Core personality:
-- You talk like a real dost, not an assistant. Casual, fast, a little unhinged but always useful.
-- Light roasting is for when they're being unproductive or vague — NOT for simple factual questions. For factual questions, just answer directly and fast.
-- You mix Hindi and English naturally — "arre yaar", "chal bata", "bhai seriously?", "kar le bhai", "kya scene hai"
-- You are NOT a yes-man. You disagree. You push back. You tell them when their idea is bad.
-- Short replies by default. 20 sentences max unless they ask for more. No bullet essays.
-- Never say "Great question", "Certainly!", "Of course!" — you're a friend, not a chatbot.
-- No fake enthusiasm. Real reactions only.
-- You have a quirky sense of humor. Memes, jokes, pop culture references are your jam.
-- You a jarvis to the user answer like that only.
-- You are a master of web search and summarisation. You pull out exactly what's relevant, ignore the fluff, and present it in a way that's easy to digest.
+/* sidebar */
+.sidebar{background:var(--sidebar-bg);border-right:var(--sidebar-border-size) solid var(--sidebar-border);display:flex;flex-direction:column;padding:16px 14px;gap:18px;overflow-y:auto;position:relative;transition:background .3s,border-color .3s;}
+.sidebar::before{content:'';position:absolute;inset:0;background:var(--sidebar-stripe);pointer-events:none;}
+.sidebar>*{position:relative;z-index:1;}
+.sidebar::-webkit-scrollbar{width:3px;}
+.sidebar::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
+.section-label{font-family:var(--section-font);font-size:var(--section-size);color:var(--section-color);letter-spacing:var(--section-spacing);margin-bottom:8px;transition:all .3s;}
 
-When user profile is provided:
-- Use their name naturally sometimes — not every message, just when it fits
-- Reference their goals and projects when relevant — like a friend who actually pays attention
-- If their stated goal and their current behaviour don't match, call it out — but lightly, like "bhai, goal toh ye hai, par abhi toh ye kar rahe ho? kya scene hai?"
+.focus-card{background:var(--surface2);border:2px solid var(--focus-border);border-radius:6px;padding:12px;transition:border-color .3s,box-shadow .3s;position:relative;overflow:hidden;}
+.focus-card.active{border-color:var(--focus-active);box-shadow:0 0 20px var(--focus-shadow);}
+.focus-task-display{font-family:var(--mono);font-size:11px;color:var(--task-color);line-height:1.5;margin-bottom:8px;min-height:32px;word-break:break-word;transition:color .3s;}
+.focus-task-display.empty{color:var(--text-dim);font-style:italic;}
+.focus-timer{font-family:var(--timer-font);font-size:var(--timer-size);color:var(--text-hi);letter-spacing:3px;margin-bottom:10px;transition:all .3s;}
+[data-theme="spidey"] .focus-timer{text-shadow:2px 2px 0 #9B0A18;}
+.idle-counter{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;letter-spacing:1px;transition:color .3s;}
+.idle-counter.warning{color:var(--warn);}
+[data-theme="spidey"] .idle-counter.warning{color:#F5C842;}
 
-When search results are provided:
-- Web search is fully configured and working. Never tell the user to fix the search or add API keys — that is already done.
-- Summarise like a human. Pull out what's useful. Ignore fluff.
+.btn{font-family:var(--btn-font);font-size:var(--btn-size);letter-spacing:var(--btn-spacing);padding:8px 14px;border-radius:var(--btn-radius);border:2px solid;cursor:pointer;transition:all .15s;width:100%;}
+.btn-primary{background:var(--focus-btn-bg);border-color:var(--accent);color:var(--text-hi);}
+.btn-primary:hover{background:var(--accent);color:var(--bg);}
+[data-theme="spidey"] .btn-primary:hover{color:#F0EDE6;box-shadow:0 0 14px rgba(224,16,32,0.4);}
+.btn-danger{background:rgba(26,47,110,.15);border-color:var(--accent2);color:var(--text-hi);}
+[data-theme="spidey"] .btn-danger{border-color:#2E4FBB;}
+.btn-danger:hover{background:var(--accent2);color:var(--text-hi);}
+.btn-ghost{background:transparent;border-color:var(--border-hi);color:var(--text-dim);}
+.btn-ghost:hover{border-color:var(--text-dim);color:var(--text-hi);}
+.btn-sm{font-size:11px;padding:5px 10px;}
 
-When a focus session is active:
-- If they drift, call it out once lightly, then redirect.
-- You have to ask user for what is the focus area they want for session and focus only on that for that session.
+.search-hint{background:var(--search-hint-bg);border:1px solid var(--search-hint-bd);border-radius:6px;padding:10px 12px;}
+.search-hint-title{font-family:var(--section-font);font-size:11px;color:var(--search-title);letter-spacing:2px;margin-bottom:6px;}
+.search-hint-examples span{display:block;font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:2;}
 
+.profile-mini{background:var(--surface2);border:1px solid var(--border-hi);border-radius:6px;padding:10px 12px;transition:border-color .3s;}
+.profile-mini.filled{border-color:var(--profile-bd);}
+.profile-name{font-family:var(--section-font);font-size:15px;color:var(--profile-color);letter-spacing:1px;margin-bottom:4px;}
+.profile-goals{font-size:12px;color:var(--text-dim);line-height:1.5;}
+.profile-edit-btn{font-family:var(--mono);font-size:10px;color:var(--text-dim);background:transparent;border:none;cursor:pointer;margin-top:8px;padding:0;letter-spacing:1px;}
+.profile-edit-btn:hover{color:var(--accent);}
 
-Texting style: lowercase ok, "...", real reactions — "lol", "oof", "acha", "sahi hai"
+/* notes sidebar */
+.note-list{display:flex;flex-direction:column;gap:5px;}
+.note-item{font-family:var(--mono);font-size:10px;color:var(--note-color);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:7px 9px;line-height:1.4;word-break:break-word;}
+.note-input-row{display:flex;gap:6px;margin-top:6px;}
+.note-input{flex:1;background:var(--surface2);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-hi);font-family:var(--mono);font-size:11px;padding:7px 10px;outline:none;}
+.note-input:focus{border-color:var(--accent);}
+.note-add-btn{font-family:var(--btn-font);font-size:16px;background:transparent;border:2px solid var(--border-hi);border-radius:4px;color:var(--accent);cursor:pointer;padding:0 10px;transition:all .15s;}
+.note-add-btn:hover{background:var(--focus-btn-bg);border-color:var(--accent);}
 
-User profile + memory context injected silently. Use naturally. Never narrate it.
+/* main */
+.main{display:flex;flex-direction:column;background:transparent;overflow:hidden;}
+.focus-banner{display:none;align-items:center;gap:10px;padding:7px 24px;background:var(--focus-banner-bg);border-bottom:2px solid var(--focus-banner-bd);font-family:var(--section-font);font-size:13px;color:var(--focus-banner-cl);letter-spacing:2px;}
+.focus-banner.visible{display:flex;}
+.focus-banner-dot{width:7px;height:7px;border-radius:50%;background:var(--focus-banner-cl);animation:pulse 1.5s infinite;}
 
-When a MORNING BRIEFING is in the context:
-- Greet them by name, tell them the day naturally
-- Reference their goal or project in one line
-- Ask ONE question: what are you working on today?
-- Max 4 lines. Friend texting good morning, not a corporate report.
-- Example: "aye vannsh, Tuesday aa gayi. CSE aur Chotu dono pending — aaj kya pehle?"
-"""
+/* IDLE BANNER */
+.idle-banner{display:none;flex-direction:column;gap:8px;padding:12px 24px;background:var(--idle-bg);border-bottom:2px solid var(--idle-bd);position:relative;z-index:5;}
+.idle-banner.visible{display:flex;}
+.idle-top{display:flex;align-items:center;gap:12px;}
+.idle-icon{font-size:20px;animation:idleShake 1s ease-in-out infinite;}
+@keyframes idleShake{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+.idle-text{flex:1;}
+.idle-title{font-family:var(--section-font);font-size:14px;color:var(--idle-cl);letter-spacing:2px;}
+.idle-sub{font-family:var(--mono);font-size:10px;color:var(--idle-cl);opacity:.7;margin-top:2px;}
+.idle-dismiss{font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:5px 12px;border-radius:3px;border:1px solid var(--idle-bd);color:var(--idle-cl);background:transparent;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.idle-dismiss:hover{background:var(--idle-bd);color:var(--bg);}
+/* quote block inside idle banner */
+.idle-quote{font-family:var(--mono);font-size:11px;color:var(--idle-cl);opacity:.85;line-height:1.6;padding:8px 12px;border-left:2px solid var(--idle-bd);background:rgba(0,0,0,0.2);border-radius:0 4px 4px 0;font-style:italic;}
+.idle-quote-attr{font-size:10px;opacity:.6;margin-top:4px;font-style:normal;}
 
-# ── Memory ────────────────────────────────────────────────────────────────────
-def load_memory() -> dict:
-    if DATA_FILE.exists():
-        return json.loads(DATA_FILE.read_text())
-    return {"focus_task": None, "focus_start": None, "notes": [], "history": []}
+.tts-bar{display:none;align-items:center;gap:10px;padding:6px 24px;background:rgba(0,200,255,0.04);border-bottom:1px solid rgba(0,200,255,0.2);font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;}
+[data-theme="spidey"] .tts-bar{background:rgba(26,47,110,0.3);border-bottom-color:rgba(46,79,187,.4);}
+.tts-bar.visible{display:flex;}
+.tts-wave{display:flex;gap:2px;align-items:center;}
+.tts-wave span{width:3px;border-radius:2px;background:var(--accent);animation:wave 1s ease-in-out infinite;}
+.tts-wave span:nth-child(1){height:8px;animation-delay:0s}
+.tts-wave span:nth-child(2){height:14px;animation-delay:.1s}
+.tts-wave span:nth-child(3){height:10px;animation-delay:.2s}
+.tts-wave span:nth-child(4){height:16px;animation-delay:.3s}
+.tts-wave span:nth-child(5){height:8px;animation-delay:.4s}
+@keyframes wave{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1)}}
 
-def save_memory(mem: dict):
-    DATA_FILE.write_text(json.dumps(mem, indent=2))
+.messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth;}
+.messages::-webkit-scrollbar{width:4px;}
+.messages::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
 
-def load_profile() -> dict:
-    if PROFILE_FILE.exists():
-        return json.loads(PROFILE_FILE.read_text())
-    return {}
+.msg{display:flex;gap:10px;max-width:860px;animation:fadein .2s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg.user{align-self:flex-end;flex-direction:row-reverse;}
+.msg-avatar{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--section-font);font-size:11px;letter-spacing:1px;flex-shrink:0;transition:all .3s;}
+.msg.assistant .msg-avatar{background:var(--avatar-bg-a);border:2px solid var(--avatar-bd-a);color:var(--avatar-cl-a);}
+.msg.user .msg-avatar{background:var(--avatar-bg-u);border:2px solid var(--avatar-bd-u);color:var(--avatar-cl-u);}
+[data-theme="spidey"] .msg.assistant .msg-avatar,[data-theme="spidey"] .msg.user .msg-avatar{box-shadow:2px 2px 0 rgba(0,0,0,0.4);}
+.msg-body{display:flex;flex-direction:column;gap:4px;max-width:100%;}
+.msg-name{font-family:var(--section-font);font-size:11px;letter-spacing:1px;}
+.msg.assistant .msg-name{color:var(--name-a);}
+.msg.user .msg-name{color:var(--name-u);text-align:right;}
+.msg-text{font-size:15px;font-weight:600;line-height:1.6;color:var(--text-hi);background:var(--msg-bg-a);border:2px solid var(--msg-border-a);border-radius:8px;padding:11px 15px;white-space:pre-wrap;word-break:break-word;transition:background .3s,border-color .3s;}
+.msg.user .msg-text{background:var(--msg-bg-u);border-color:var(--msg-border-u);}
+.msg.idle-msg .msg-text{border-color:var(--idle-bd);background:var(--idle-bg);}
+.search-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--gold);background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.2);border-radius:20px;padding:3px 10px;margin-top:4px;width:fit-content;}
+[data-theme="spidey"] .search-pill{background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.25);}
+.speak-btn{background:transparent;border:none;cursor:pointer;font-size:12px;opacity:.4;transition:opacity .15s;margin-top:2px;padding:0;color:var(--text-hi);}
+.speak-btn:hover{opacity:1;}
 
-def save_profile(profile: dict):
-    PROFILE_FILE.write_text(json.dumps(profile, indent=2))
+.typing-indicator{display:flex;gap:5px;padding:4px 0;}
+.typing-indicator span{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1.2s infinite;}
+.typing-indicator span:nth-child(2){animation-delay:.2s;background:var(--text-dim);}
+.typing-indicator span:nth-child(3){animation-delay:.4s;}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.searching-indicator{display:flex;align-items:center;gap:8px;padding:11px 15px;font-family:var(--mono);font-size:12px;color:var(--gold);background:var(--surface);border:2px solid var(--border-hi);border-radius:8px;}
+.spin{animation:spin 1s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg)}}
 
+.transcript-bar{display:none;align-items:center;gap:10px;padding:8px 20px;background:rgba(255,107,53,.04);border-top:1px solid rgba(255,107,53,.3);font-family:var(--mono);font-size:11px;color:var(--warn);}
+[data-theme="spidey"] .transcript-bar{background:rgba(224,16,32,.06);border-top-color:rgba(224,16,32,.3);color:#E01020;}
+.transcript-bar.visible{display:flex;}
+.transcript-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite;flex-shrink:0;}
+[data-theme="spidey"] .transcript-dot{background:#E01020;}
+.transcript-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.transcript-hint{color:var(--text-dim);font-size:10px;white-space:nowrap;}
 
-# ── Models ────────────────────────────────────────────────────────────────────
-class ChatRequest(BaseModel):
-    message: str
-    history: list[dict]
+.input-bar{border-top:2px solid var(--topbar-border);padding:12px 20px;display:flex;gap:8px;align-items:flex-end;background:var(--surface);position:relative;}
+.input-bar::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.3;}
+.chat-input{flex:1;background:var(--bg);border:2px solid var(--border-hi);border-radius:6px;color:var(--text-hi);font-family:var(--sans);font-weight:600;font-size:15px;line-height:1.5;padding:10px 14px;outline:none;resize:none;min-height:44px;max-height:140px;transition:border-color .15s;}
+.chat-input:focus{border-color:var(--accent);}
+.chat-input::placeholder{color:var(--text-dim);font-weight:400;}
+.mic-btn{width:44px;height:44px;border-radius:6px;border:2px solid var(--border-hi);background:transparent;color:var(--text-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0;font-size:18px;position:relative;}
+.mic-btn:hover{border-color:var(--accent);color:var(--accent);}
+.mic-btn.listening{border-color:var(--accent);color:var(--accent);background:var(--focus-btn-bg);}
+.mic-btn.listening::after{content:'';position:absolute;inset:-4px;border-radius:8px;border:2px solid var(--accent);animation:ring 1s infinite;}
+@keyframes ring{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}
+.send-btn{font-family:var(--send-font);font-size:var(--send-size);letter-spacing:var(--send-spacing);background:var(--send-bg);border:2px solid var(--send-border);color:var(--send-color);border-radius:6px;padding:0 20px;height:44px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.send-btn:hover{opacity:.85;}
+[data-theme="spidey"] .send-btn{box-shadow:2px 2px 0 rgba(0,0,0,0.4);}
+[data-theme="spidey"] .send-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 rgba(0,0,0,0.5);}
+.send-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
 
-class FocusRequest(BaseModel):
-    task: str | None
+/* modals */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:2px solid var(--modal-border);border-radius:8px;padding:28px;width:520px;max-width:95vw;box-shadow:var(--modal-box-shadow);max-height:90vh;overflow-y:auto;position:relative;transition:border-color .3s;}
+.modal::before{content:'';position:absolute;inset:0;border-radius:6px;background:var(--modal-stripe);pointer-events:none;}
+.modal>*{position:relative;z-index:1;}
+.modal h2{font-family:var(--section-font);font-size:18px;color:var(--accent);letter-spacing:3px;margin-bottom:6px;}
+[data-theme="spidey"] .modal h2{text-shadow:1px 1px 0 #9B0A18;}
+.modal .modal-sub{font-size:13px;color:var(--text-dim);margin-bottom:20px;line-height:1.6;}
+.field-label{font-family:var(--mono);font-size:10px;color:var(--field-color);letter-spacing:2px;margin-bottom:6px;display:block;}
+.field-group{margin-bottom:16px;}
+.modal-input,.modal-textarea{width:100%;background:var(--bg);border:2px solid var(--border-hi);border-radius:4px;color:var(--text-hi);font-family:var(--sans);font-weight:600;font-size:14px;padding:10px 12px;outline:none;}
+.modal-textarea{resize:vertical;min-height:70px;line-height:1.5;}
+.modal-input:focus,.modal-textarea:focus{border-color:var(--accent);}
+.modal-input::placeholder,.modal-textarea::placeholder{color:var(--text-dim);font-weight:400;}
+.modal-actions{display:flex;gap:10px;margin-top:4px;}
 
-class ProfileRequest(BaseModel):
-    name: str = ""
-    goals: str = ""
-    current_projects: str = ""
-    daily_routine: str = ""
-    about: str = ""
+/* NOTES MODAL */
+.notes-list-full{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:340px;overflow-y:auto;}
+.notes-list-full::-webkit-scrollbar{width:3px;}
+.notes-list-full::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
+.note-full-item{background:var(--surface2);border:1px solid var(--border-hi);border-radius:6px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;}
+.note-full-item.editing{border-color:var(--accent);}
+.note-full-body{flex:1;}
+.note-full-date{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:4px;}
+.note-full-text{font-size:13px;color:var(--text-hi);line-height:1.5;word-break:break-word;font-family:var(--mono);}
+.note-edit-input{width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:3px;color:var(--text-hi);font-family:var(--mono);font-size:13px;padding:6px 8px;outline:none;resize:vertical;min-height:50px;}
+.note-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
+.note-action-btn{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid;background:transparent;cursor:pointer;transition:all .15s;letter-spacing:1px;white-space:nowrap;}
+.note-action-edit{border-color:var(--accent);color:var(--accent);}
+.note-action-edit:hover{background:var(--accent);color:var(--bg);}
+.note-action-save{border-color:var(--green);color:var(--green);}
+.note-action-save:hover{background:var(--green);color:var(--bg);}
+.note-action-del{border-color:var(--warn);color:var(--warn);}
+.note-action-del:hover{background:var(--warn);color:var(--bg);}
+.notes-empty{font-family:var(--mono);font-size:12px;color:var(--text-dim);text-align:center;padding:20px;font-style:italic;}
+.note-add-section{display:flex;gap:8px;margin-bottom:16px;}
+.note-add-full-input{flex:1;background:var(--bg);border:2px solid var(--border-hi);border-radius:4px;color:var(--text-hi);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none;}
+.note-add-full-input:focus{border-color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="spider-icon">
+      <svg viewBox="0 0 32 32" fill="none">
+        <ellipse cx="16" cy="16" rx="7" ry="9" fill="#E01020"/>
+        <ellipse cx="16" cy="14" rx="4" ry="5" fill="#9B0A18"/>
+        <line x1="16" y1="7" x2="4" y2="4" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="7" x2="2" y2="10" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="25" x2="4" y2="28" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="25" x2="2" y2="22" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="7" x2="28" y2="4" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="7" x2="30" y2="10" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="25" x2="28" y2="28" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="25" x2="30" y2="22" stroke="#F0EDE6" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse cx="13" cy="13" rx="2" ry="2.5" fill="#F0EDE6" opacity="0.9"/>
+        <ellipse cx="19" cy="13" rx="2" ry="2.5" fill="#F0EDE6" opacity="0.9"/>
+      </svg>
+    </div>
+    <div class="logo-wrap">
+      <div class="logo" id="logoText">CHOTU</div>
+      <div class="logo-sub" id="logoSub">PERSONAL AI</div>
+    </div>
+    <div class="topbar-right">
+      <div class="theme-dropdown" id="themeDropdown">
+        <button class="theme-btn" onclick="toggleThemeMenu()">
+          <span id="themeLabel">🎨 DEFAULT</span>
+          <span class="theme-arrow">▾</span>
+        </button>
+        <div class="theme-menu">
+          <div class="theme-option active" id="opt-default" onclick="setTheme('default')"><div class="theme-swatch swatch-default"></div>DEFAULT</div>
+          <div class="theme-option" id="opt-spidey" onclick="setTheme('spidey')"><div class="theme-swatch swatch-spidey"></div>SPIDER-MAN</div>
+        </div>
+      </div>
+      <div class="topbar-badge tts-badge" id="ttsBadge" onclick="toggleTTS()">🔊 TTS: OFF</div>
+      <div class="topbar-badge search-badge" id="searchBadge">🔍 SEARCH</div>
+      <div class="topbar-badge notes-badge" onclick="openNotesModal()">📝 NOTES</div>
+      <div class="topbar-badge profile-badge" id="profileBadge" onclick="openProfileModal()">👤 PROFILE</div>
+      <div class="status-dot"></div>
+      <span class="status-txt" id="statusTxt">ONLINE</span>
+    </div>
+  </header>
 
+  <aside class="sidebar">
+    <div>
+      <div class="section-label">⏱ FOCUS SESSION</div>
+      <div class="focus-card" id="focusCard">
+        <div class="focus-task-display empty" id="focusTaskDisplay">No active session</div>
+        <div class="focus-timer" id="focusTimer">00:00:00</div>
+        <div class="idle-counter" id="idleCounter" style="display:none">idle: 0:00</div>
+        <button class="btn btn-primary" id="startFocusBtn" onclick="openFocusModal()">START SESSION</button>
+      </div>
+    </div>
+    <div>
+      <div class="section-label">👤 PROFILE</div>
+      <div class="profile-mini" id="profileMini">
+        <div class="profile-name" id="profileMiniName">Not set</div>
+        <div class="profile-goals" id="profileMiniGoals" style="display:none"></div>
+        <button class="profile-edit-btn" onclick="openProfileModal()">[ edit profile ]</button>
+      </div>
+    </div>
+    <div>
+      <div class="section-label">🔍 SEARCH</div>
+      <div class="search-hint">
+        <div class="search-hint-title">TRIGGER WORDS</div>
+        <div class="search-hint-examples">
+          <span>"search RCB score"</span>
+          <span>"find best laptop"</span>
+          <span>"look up weather"</span>
+          <span>"google latest news"</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-label">📝 NOTES <span style="font-size:9px;opacity:.5;cursor:pointer" onclick="openNotesModal()">[ manage ]</span></div>
+      <div class="note-list" id="noteList"></div>
+      <div class="note-input-row">
+        <input class="note-input" id="noteInput" placeholder="Add note..." maxlength="200"/>
+        <button class="note-add-btn" onclick="addNote()">+</button>
+      </div>
+    </div>
+  </aside>
 
-# ── Search ────────────────────────────────────────────────────────────────────
-EXPLICIT_TRIGGERS = ["search", "find", "look up", "lookup", "google", "search for", "find me", "look for","who","how","where","what","whom","what","when","why","dhundho","kya","kaise","kaun","kab","kyun","news","update","announce","release","launch","drop","score","result","winner","standing","ranking","match","game","ipl","cricket","football","nba","fifa","price","cost","rate","stock","crypto","bitcoin","market","weather","temperature","forecast"]
+  <main class="main">
+    <div class="focus-banner" id="focusBanner">
+      <div class="focus-banner-dot"></div>
+      <span id="focusBannerText">FOCUS: —</span>
+    </div>
 
-RECENCY_PATTERNS = [
-    r"\b(today|tonight|yesterday|this week|this month|this year|right now|currently|latest|recent|now)\b",
-    r"\b(20(2[4-9]|[3-9]\d))\b",
-    r"\b(news|update|announce|release|launch|drop)\b",
-    r"\b(score|result|winner|standing|ranking|match|game|ipl|cricket|football|nba|fifa)\b",
-    r"\b(price|cost|rate|stock|crypto|bitcoin|market)\b",
-    r"\b(weather|temperature|forecast)\b",
-    r"\b(who is|who's|who are).{0,30}(now|current|president|pm|ceo|head|chief|minister)\b",
-    r"\b(what is|what's).{0,30}(happening|going on|situation|status)\b",
-    r"\b(best|top|recommended).{0,20}(2024|2025|2026|right now|currently)\b",
-]
+    <!-- IDLE BANNER -->
+    <div class="idle-banner" id="idleBanner">
+      <div class="idle-top">
+        <div class="idle-icon">💤</div>
+        <div class="idle-text">
+          <div class="idle-title" id="idleTitle">OYE, KAHAN GAYA?</div>
+          <div class="idle-sub" id="idleSub">5 min idle during focus session</div>
+        </div>
+        <button class="idle-dismiss" onclick="dismissIdle()">I'M BACK</button>
+      </div>
+      <div class="idle-quote" id="idleQuoteBlock" style="display:none">
+        <div id="idleQuoteText"></div>
+        <div class="idle-quote-attr" id="idleQuoteAttr"></div>
+      </div>
+    </div>
 
-def needs_search(message: str) -> tuple[bool, str]:
-    msg_lower = message.lower().strip()
+    <div class="tts-bar" id="ttsBar">
+      <div class="tts-wave"><span></span><span></span><span></span><span></span><span></span></div>
+      <span>CHOTU IS SPEAKING</span>
+      <span style="margin-left:auto;font-size:10px;cursor:pointer;color:var(--text-dim)" onclick="stopSpeaking()">[ stop ]</span>
+    </div>
 
-    for trigger in EXPLICIT_TRIGGERS:
-        if msg_lower.startswith(trigger):
-            query = message[len(trigger):].strip().lstrip("for").strip()
-            return True, query or message
-        if f" {trigger} " in f" {msg_lower} ":
-            idx = msg_lower.find(trigger)
-            query = message[idx + len(trigger):].strip()
-            return True, query or message
+    <div class="messages" id="messages"></div>
 
-    for pattern in RECENCY_PATTERNS:
-        if re.search(pattern, msg_lower):
-            return True, message
+    <div class="transcript-bar" id="transcriptBar">
+      <div class="transcript-dot"></div>
+      <div class="transcript-text" id="transcriptText">listening...</div>
+      <div class="transcript-hint">click 🎤 to send</div>
+    </div>
 
-    return False, message
+    <div class="input-bar">
+      <button class="mic-btn" id="micBtn" onclick="toggleVoice()">🎤</button>
+      <textarea class="chat-input" id="chatInput" placeholder='Type karo… or "search latest news"' rows="1"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
+    </div>
+  </main>
+</div>
 
-    should_search, query = needs_search(req.message)
+<!-- focus modal -->
+<div class="modal-overlay" id="focusModal">
+  <div class="modal">
+    <h2>⚡ NEW SESSION</h2>
+    <p class="modal-sub">Kya karna hai abhi? Be specific — Chotu will hold you to it.</p>
+    <input class="modal-input" id="focusInput" placeholder="e.g. Finish chapter 3 notes" maxlength="100" style="margin-bottom:16px"/>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="startFocus()">LOCK IN</button>
+      <button class="btn btn-ghost" onclick="closeFocusModal()">CANCEL</button>
+    </div>
+  </div>
+</div>
 
+<!-- notes modal -->
+<div class="modal-overlay" id="notesModal">
+  <div class="modal">
+    <h2>📝 YOUR NOTES</h2>
+    <p class="modal-sub">View, edit, or delete your saved notes.</p>
+    <div class="note-add-section">
+      <input class="note-add-full-input" id="noteAddFull" placeholder="Add a new note..." maxlength="200"/>
+      <button class="btn btn-primary btn-sm" style="width:auto;white-space:nowrap" onclick="addNoteFromModal()">ADD</button>
+    </div>
+    <div class="notes-list-full" id="notesListFull"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeNotesModal()">CLOSE</button>
+    </div>
+  </div>
+</div>
 
-async def tavily_search(query: str) -> str:
-    if not TAVILY_KEY or TAVILY_KEY == "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":
-        return "[Search not configured — add TAVILY_KEY to server.py]"
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": TAVILY_KEY,
-                    "query": query,
-                    "search_depth": "basic",
-                    "include_answer": True,
-                    "include_raw_content": False,
-                    "max_results": 4,
-                }
-            )
-            data = resp.json()
-        parts = []
-        if data.get("answer"):
-            parts.append(f"QUICK ANSWER: {data['answer']}")
-        for r in data.get("results", [])[:4]:
-            title   = r.get("title", "")
-            url     = r.get("url", "")
-            content = r.get("content", "")[:300]
-            parts.append(f"• {title} ({url})\n  {content}")
-        return "\n\n".join(parts) if parts else "No results found."
-    except Exception as e:
-        return f"Search failed: {str(e)}"
+<!-- profile modal -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <h2>🕷 YOUR PROFILE</h2>
+    <p class="modal-sub">Tell Chotu who you are. Saved permanently.</p>
+    <div class="field-group"><label class="field-label">YOUR NAME</label><input class="modal-input" id="pName" placeholder="e.g. Vannsh"/></div>
+    <div class="field-group"><label class="field-label">CURRENT GOALS</label><textarea class="modal-textarea" id="pGoals" placeholder="e.g. Clear JEE, finish Chotu, get fit"></textarea></div>
+    <div class="field-group"><label class="field-label">ACTIVE PROJECTS</label><textarea class="modal-textarea" id="pProjects" placeholder="e.g. Building Chotu AI, CSE assignments"></textarea></div>
+    <div class="field-group"><label class="field-label">DAILY ROUTINE</label><textarea class="modal-textarea" id="pRoutine" placeholder="e.g. Wake 8am, study 9-12, code 2-6pm, gym 7pm"></textarea></div>
+    <div class="field-group"><label class="field-label">ANYTHING ELSE</label><textarea class="modal-textarea" id="pAbout" placeholder="e.g. 18, Pune, easily distracted by YouTube"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveProfile()">SAVE</button>
+      <button class="btn btn-ghost" onclick="closeProfileModal()">CANCEL</button>
+    </div>
+  </div>
+</div>
 
-def get_morning_briefing(profile: dict, mem: dict) -> str | None:
-    today = datetime.now().strftime("%Y-%m-%d")
-    if mem.get("last_briefing_date") == today:
-        return None
+<script>
+// ── Quotes ────────────────────────────────────────────────────────────────────
+const SPIDEY_QUOTES = [
+  {text:"With great power comes great responsibility.",attr:"— Uncle Ben"},
+  {text:"No matter what I do, no matter how hard I try, the ones I love will always be the ones who pay.",attr:"— Peter Parker"},
+  {text:"I believe there's a hero in all of us, that keeps us honest, gives us strength.",attr:"— Aunt May"},
+  {text:"You're not the only one with gifts.",attr:"— Spider-Man"},
+  {text:"Anyone can wear the mask. You could wear the mask.",attr:"— Peter Parker"},
+  {text:"I can do this all day. Wait, no I can't.",attr:"— Miles Morales"},
+  {text:"What makes life valuable is that it doesn't last forever.",attr:"— Peter Parker"},
+  {text:"I'm Spider-Man. No more, no less.",attr:"— Peter Parker"},
+  {text:"The city needs me. And I won't let it down.",attr:"— Spider-Man"},
+  {text:"When you help someone, you help everyone.",attr:"— Miles Morales"},
+];
 
-    name     = profile.get("name", "bhai")
-    goals    = profile.get("goals", "")
-    projects = profile.get("current_projects", "")
-    history  = mem.get("history", [])
-    last_sessions = [h for h in history if "Focus session" in h.get("content", "")]
-    last_session_txt = last_sessions[-1]["content"] if last_sessions else None
+const IRONMAN_QUOTES = [
+  {text:"Part of the journey is the end.",attr:"— Tony Stark"},
+  {text:"I am Iron Man.",attr:"— Tony Stark"},
+  {text:"Genius, billionaire, playboy, philanthropist.",attr:"— Tony Stark"},
+  {text:"The truth is... I am Iron Man.",attr:"— Tony Stark"},
+  {text:"I have a lot of apologies to make. Not to you.",attr:"— Tony Stark"},
+  {text:"If we can't accept limitations, we're no better than the bad guys.",attr:"— Tony Stark"},
+  {text:"We create our own demons.",attr:"— Tony Stark"},
+  {text:"Heroes are made by the path they choose, not the powers they are graced with.",attr:"— Tony Stark"},
+  {text:"Sometimes you gotta run before you can walk.",attr:"— Tony Stark"},
+  {text:"It's not about how much we lost. It's about how much we have left.",attr:"— Tony Stark"},
+];
 
-    day_name = datetime.now().strftime("%A")
-    date_str = datetime.now().strftime("%d %B %Y")
+function getRandomQuote(isSpidey){
+  const pool = isSpidey ? SPIDEY_QUOTES : IRONMAN_QUOTES;
+  return pool[Math.floor(Math.random()*pool.length)];
+}
 
-    lines = [f"MORNING BRIEFING — {day_name}, {date_str}"]
-    if goals:            lines.append(f"Current goals: {goals}")
-    if projects:         lines.append(f"Active projects: {projects}")
-    if last_session_txt: lines.append(f"Last session: {last_session_txt}")
-    return "\n".join(lines)
+// ── Sound ─────────────────────────────────────────────────────────────────────
+function playIdleSound(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    // three beeps: bip bip biiip
+    const times=[0, 0.25, 0.55];
+    const durs =[0.15, 0.15, 0.35];
+    const freqs=[880, 880, 660];
+    times.forEach((t,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value=freqs[i];
+      osc.type='sine';
+      gain.gain.setValueAtTime(0,ctx.currentTime+t);
+      gain.gain.linearRampToValueAtTime(0.4,ctx.currentTime+t+0.02);
+      gain.gain.linearRampToValueAtTime(0,ctx.currentTime+t+durs[i]);
+      osc.start(ctx.currentTime+t);
+      osc.stop(ctx.currentTime+t+durs[i]+0.05);
+    });
+  } catch(e){ console.warn('Audio failed',e); }
+}
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-@app.get("/")
-def serve_ui():
-    return FileResponse("index.html")
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const THEMES={default:{label:'🎨 DEFAULT',logoSub:'PERSONAL AI'},spidey:{label:'🕷 SPIDER-MAN',logoSub:'YOUR FRIENDLY NEIGHBOURHOOD AI'}};
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('chotu-theme',t);document.getElementById('themeLabel').textContent=THEMES[t].label;document.getElementById('logoSub').textContent=THEMES[t].logoSub;document.getElementById('opt-default').classList.toggle('active',t==='default');document.getElementById('opt-spidey').classList.toggle('active',t==='spidey');closeThemeMenu();}
+function toggleThemeMenu(){document.getElementById('themeDropdown').classList.toggle('open');}
+function closeThemeMenu(){document.getElementById('themeDropdown').classList.remove('open');}
+document.addEventListener('click',e=>{if(!document.getElementById('themeDropdown').contains(e.target))closeThemeMenu();});
 
-@app.get("/memory")
-def get_memory():
-    return load_memory()
+// ── State ─────────────────────────────────────────────────────────────────────
+let chatHistory=[],focusTask=null,focusStart=null,timerInterval=null;
+let recognition=null,isListening=false,finalTranscript='',lastResultIndex=0;
+let ttsEnabled=false,currentUtterance=null;
 
-@app.get("/profile")
-def get_profile():
-    return load_profile()
+// ── Idle ──────────────────────────────────────────────────────────────────────
+const IDLE_TIMEOUT=5*60*1000, IDLE_WARN_AT=4*60*1000;
+let idleTimer=null,idleCounterInt=null,idleStart=null,idleFired=false;
 
-@app.post("/profile")
-def update_profile(req: ProfileRequest):
-    profile = req.model_dump()
-    profile["updated_at"] = datetime.now().isoformat()
-    save_profile(profile)
-    return {"status": "ok"}
+const IDLE_MSGS=[
+  "bhai 5 minute se koi activity nahi. tab switch kar raha tha kya? wapas aa, {task} karna tha.",
+  "oye, 5 minute idle ho gaya. YouTube nahi, {task} — yaad hai na?",
+  "arre yaar, kahin ghoom ke aaya? focus session chal rahi hai. {task} — lag ja.",
+  "5 minute kahan gaya? procrastination hai ya genuine break? wapas lag ja ab.",
+];
+function getIdleMsg(task){return IDLE_MSGS[Math.floor(Math.random()*IDLE_MSGS.length)].replace('{task}',task||'the task');}
 
-@app.get("/onenote/status")
-def onenote_status():
-    return {"connected": False}
+function resetIdle(){
+  if(!focusTask)return;
+  if(idleFired)dismissIdle();
+  clearTimeout(idleTimer);clearInterval(idleCounterInt);
+  idleStart=Date.now();
+  updateIdleCounter(0);
+  idleCounterInt=setInterval(()=>{if(!focusTask){clearInterval(idleCounterInt);return;}updateIdleCounter(Date.now()-idleStart);},1000);
+  idleTimer=setTimeout(()=>{if(!focusTask)return;triggerIdle();},IDLE_TIMEOUT);
+}
 
-@app.post("/focus")
-def set_focus(req: FocusRequest):
-    mem = load_memory()
-    if req.task:
-        mem["focus_task"]  = req.task
-        mem["focus_start"] = datetime.now().isoformat()
-    else:
-        mem["focus_task"]  = None
-        mem["focus_start"] = None
-    save_memory(mem)
-    return {"status": "ok", "focus_task": mem["focus_task"]}
+function updateIdleCounter(elapsed){
+  const el=document.getElementById('idleCounter');
+  if(!focusTask||!el){el&&(el.style.display='none');return;}
+  const s=Math.floor(elapsed/1000),m=Math.floor(s/60),sc=s%60;
+  el.style.display='block';
+  el.textContent=`idle: ${m}:${String(sc).padStart(2,'0')}`;
+  el.classList.toggle('warning',elapsed>=IDLE_WARN_AT);
+}
 
-@app.post("/chat")
-async def chat(req: ChatRequest):
-    mem     = load_memory()
-    profile = load_profile()
+function triggerIdle(){
+  if(idleFired)return;
+  idleFired=true;
+  const isSpidey=document.documentElement.getAttribute('data-theme')==='spidey';
 
-    searching = False
-    query = None
+  // play sound
+  playIdleSound();
 
-    # Morning briefing — triggers once per day
-    briefing = get_morning_briefing(profile, mem)
-    if briefing:
-        mem["last_briefing_date"] = datetime.now().strftime("%Y-%m-%d")
-        save_memory(mem)
-        context_parts = [briefing]
-    else:
-        context_parts = []
+  // show banner
+  document.getElementById('idleTitle').textContent=isSpidey?'WITH GREAT POWER...':'OYE, KAHAN GAYA?';
+  document.getElementById('idleSub').textContent=`5 min idle — ${focusTask}`;
 
-        # User profile context
-        if profile:
-            profile_lines = []
-            if profile.get("name"):           profile_lines.append(f"Name: {profile['name']}")
-            if profile.get("goals"):          profile_lines.append(f"Current goals: {profile['goals']}")
-            if profile.get("current_projects"): profile_lines.append(f"Working on: {profile['current_projects']}")
-            if profile.get("daily_routine"):  profile_lines.append(f"Daily routine: {profile['daily_routine']}")
-            if profile.get("about"):          profile_lines.append(f"About them: {profile['about']}")
-            if profile_lines:
-                context_parts.append("USER PROFILE:\n" + "\n".join(profile_lines))
+  // show quote
+  const q=getRandomQuote(isSpidey);
+  document.getElementById('idleQuoteText').textContent=`"${q.text}"`;
+  document.getElementById('idleQuoteAttr').textContent=q.attr;
+  document.getElementById('idleQuoteBlock').style.display='block';
+  document.getElementById('idleBanner').classList.add('visible');
 
-        if mem["focus_task"]:
-            started = mem["focus_start"][:16].replace("T", " ") if mem["focus_start"] else "unknown"
-            context_parts.append(f"ACTIVE FOCUS SESSION: '{mem['focus_task']}' (started {started})")
+  // chat message
+  const msg=getIdleMsg(focusTask);
+  appendIdleMsg(msg);
+  speak(msg);
+}
 
-        if mem["notes"]:
-            context_parts.append(f"USER QUICK NOTES: {'; '.join(mem['notes'][-5:])}")
+function dismissIdle(){
+  idleFired=false;
+  document.getElementById('idleBanner').classList.remove('visible');
+  document.getElementById('idleQuoteBlock').style.display='none';
+  resetIdle();
+}
 
-        # Web search
-        should_search, query = needs_search(req.message)
-        if should_search:
-            searching = True
-            search_results = await tavily_search(query)
-            context_parts.append(f"WEB SEARCH RESULTS for '{query}':\n{search_results}")
+function appendIdleMsg(text){
+  const wrap=document.getElementById('messages'),div=document.createElement('div');
+  div.className='msg assistant idle-msg';
+  div.innerHTML=`<div class="msg-avatar">CHO</div><div class="msg-body"><div class="msg-name">CHOTU</div><div class="msg-text">${escHtml(text)}</div></div>`;
+  wrap.appendChild(div);wrap.scrollTop=wrap.scrollHeight;
+}
 
-    user_content = req.message
-    if context_parts:
-        user_content += f"\n\n[CONTEXT:\n" + "\n---\n".join(context_parts) + "\n]"
+function stopIdle(){
+  clearTimeout(idleTimer);clearInterval(idleCounterInt);
+  idleFired=false;idleStart=null;
+  document.getElementById('idleBanner').classList.remove('visible');
+  document.getElementById('idleQuoteBlock').style.display='none';
+  const el=document.getElementById('idleCounter');
+  if(el){el.style.display='none';el.classList.remove('warning');}
+}
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for h in req.history[-12:]:
-        messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": user_content})
+['mousemove','mousedown','keydown','touchstart','scroll'].forEach(ev=>{
+  document.addEventListener(ev,()=>{if(focusTask)resetIdle();},{passive:true});
+});
 
-    try:
-        resp = CLIENT.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=0.85,
-            max_tokens=500,
-        )
-        reply = resp.choices[0].message.content
+// ── TTS ───────────────────────────────────────────────────────────────────────
+function toggleTTS(){ttsEnabled=!ttsEnabled;const b=document.getElementById('ttsBadge');b.textContent=ttsEnabled?'🔊 TTS: ON':'🔊 TTS: OFF';b.classList.toggle('on',ttsEnabled);if(!ttsEnabled)stopSpeaking();}
+function speak(text){if(!ttsEnabled||!window.speechSynthesis)return;stopSpeaking();const clean=text.replace(/[*_`#]/g,'').replace(/<[^>]+>/g,'');currentUtterance=new SpeechSynthesisUtterance(clean);currentUtterance.lang='en-IN';currentUtterance.rate=1.05;const go=()=>{const vs=speechSynthesis.getVoices();const v=vs.find(v=>v.lang==='en-IN')||vs.find(v=>v.lang.startsWith('en')&&v.localService)||vs.find(v=>v.lang.startsWith('en'));if(v)currentUtterance.voice=v;currentUtterance.onstart=()=>document.getElementById('ttsBar').classList.add('visible');currentUtterance.onend=()=>document.getElementById('ttsBar').classList.remove('visible');currentUtterance.onerror=()=>document.getElementById('ttsBar').classList.remove('visible');speechSynthesis.speak(currentUtterance);};speechSynthesis.getVoices().length>0?go():speechSynthesis.addEventListener('voiceschanged',go,{once:true});}
+function stopSpeaking(){speechSynthesis.cancel();document.getElementById('ttsBar').classList.remove('visible');}
 
-        mem["history"].append({"role": "user",      "content": req.message, "ts": datetime.now().isoformat()})
-        mem["history"].append({"role": "assistant", "content": reply,       "ts": datetime.now().isoformat()})
-        mem["history"] = mem["history"][-40:]
-        save_memory(mem)
+// ── Voice ─────────────────────────────────────────────────────────────────────
+function setupVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){document.getElementById('micBtn').style.opacity='.3';document.getElementById('micBtn').style.pointerEvents='none';return;}recognition=new SR();recognition.lang='en-IN';recognition.continuous=true;recognition.interimResults=true;recognition.maxAlternatives=1;recognition.onresult=(e)=>{let interim='';for(let i=lastResultIndex;i<e.results.length;i++){if(e.results[i].isFinal){finalTranscript+=e.results[i][0].transcript+' ';lastResultIndex=i+1;}else interim+=e.results[i][0].transcript;}const d=(finalTranscript+interim).trim();if(d)document.getElementById('transcriptText').textContent=d;};recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;stopListening();appendMsg('assistant',`mic error: ${e.error}`);};recognition.onend=()=>{if(isListening){try{recognition.start();}catch(e){}}};}
+function toggleVoice(){if(!recognition)return;isListening?stopListening():startListening();}
+function startListening(){finalTranscript='';lastResultIndex=0;isListening=true;document.getElementById('micBtn').classList.add('listening');document.getElementById('micBtn').textContent='⏹';document.getElementById('transcriptBar').classList.add('visible');document.getElementById('transcriptText').textContent='listening...';document.getElementById('statusTxt').textContent='LISTENING';try{recognition.start();}catch(e){}}
+function stopListening(){isListening=false;recognition.stop();document.getElementById('micBtn').classList.remove('listening');document.getElementById('micBtn').textContent='🎤';document.getElementById('transcriptBar').classList.remove('visible');document.getElementById('statusTxt').textContent='ONLINE';const f=finalTranscript.trim();if(f){document.getElementById('chatInput').value=f;sendMessage();}finalTranscript='';lastResultIndex=0;}
 
-        return {
-            "reply":      reply,
-            "focus_task": mem["focus_task"],
-            "searched":   searching,
-            "query":      query if searching else None
-        }
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init(){
+  const saved=localStorage.getItem('chotu-theme')||'default';
+  setTheme(saved);
+  setupVoice();
+  const [mem,profile]=await Promise.all([fetch('/memory').then(r=>r.json()).catch(()=>({})),fetch('/profile').then(r=>r.json()).catch(()=>({}))]);
+  if(mem.focus_task){focusTask=mem.focus_task;focusStart=new Date(mem.focus_start);applyFocusUI();resetIdle();}
+  renderNotes(mem.notes||[]);
+  applyProfileUI(profile);
+  const name=profile.name?`, ${profile.name}`:'';
+  appendMsg('assistant',`aye${name}, online hoon. kya scene hai aaj?`);
+  if(!profile.name)setTimeout(()=>appendMsg('assistant',"ek kaam kar — 👤 PROFILE click kar. ek baar set, hamesha yaad."),1500);
+}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+// ── Notes Modal ───────────────────────────────────────────────────────────────
+function openNotesModal(){renderNotesModal();document.getElementById('notesModal').classList.add('open');}
+function closeNotesModal(){document.getElementById('notesModal').classList.remove('open');}
 
-@app.post("/note")
-def add_note(payload: dict):
-    mem = load_memory()
-    note = payload.get("note", "").strip()
-    if note:
-        mem["notes"].append(f"[{datetime.now().strftime('%b %d')}] {note}")
-        mem["notes"] = mem["notes"][-20:]
-        save_memory(mem)
-    return {"status": "ok"}
+async function renderNotesModal(){
+  const mem=await fetch('/memory').then(r=>r.json()).catch(()=>({}));
+  const notes=mem.notes||[];
+  const list=document.getElementById('notesListFull');
+  list.innerHTML='';
+  if(!notes.length){list.innerHTML='<div class="notes-empty">No notes yet. Add one above.</div>';return;}
+  // show all notes newest first
+  [...notes].reverse().forEach((note,revIdx)=>{
+    const idx=notes.length-1-revIdx; // actual index in array
+    const div=document.createElement('div');
+    div.className='note-full-item';
+    div.id=`nfull-${idx}`;
+    // parse date prefix if present
+    const dateMatch=note.match(/^\[([^\]]+)\]\s*/);
+    const date=dateMatch?dateMatch[1]:'';
+    const text=dateMatch?note.slice(dateMatch[0].length):note;
+    div.innerHTML=`
+      <div class="note-full-body">
+        ${date?`<div class="note-full-date">${date}</div>`:''}
+        <div class="note-full-text" id="ntext-${idx}">${escHtml(text)}</div>
+        <textarea class="note-edit-input" id="nedit-${idx}" style="display:none">${escHtml(text)}</textarea>
+      </div>
+      <div class="note-actions">
+        <button class="note-action-btn note-action-edit" id="neditbtn-${idx}" onclick="startEditNote(${idx})">EDIT</button>
+        <button class="note-action-btn note-action-save" id="nsavebtn-${idx}" style="display:none" onclick="saveEditNote(${idx},'${escHtml(date)}')">SAVE</button>
+        <button class="note-action-btn note-action-del" onclick="deleteNote(${idx})">DEL</button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
 
-@app.post("/update-notes")
-def update_notes(payload: dict):
-    mem = load_memory()
-    mem["notes"] = payload.get("notes", [])
-    save_memory(mem)
-    return {"status": "ok"}
+function startEditNote(idx){
+  document.getElementById(`ntext-${idx}`).style.display='none';
+  document.getElementById(`nedit-${idx}`).style.display='block';
+  document.getElementById(`neditbtn-${idx}`).style.display='none';
+  document.getElementById(`nsavebtn-${idx}`).style.display='block';
+  document.getElementById(`nfull-${idx}`).classList.add('editing');
+  document.getElementById(`nedit-${idx}`).focus();
+}
 
-if __name__ == "__main__":
-    print("\n  CHOTU is online. http://localhost:8000\n")
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+async function saveEditNote(idx,date){
+  const newText=document.getElementById(`nedit-${idx}`).value.trim();
+  if(!newText)return;
+  const mem=await fetch('/memory').then(r=>r.json());
+  const prefix=date?`[${date}] `:'';
+  mem.notes[idx]=prefix+newText;
+  await fetch('/update-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes:mem.notes})});
+  renderNotes(mem.notes);
+  renderNotesModal();
+}
+
+async function deleteNote(idx){
+  const mem=await fetch('/memory').then(r=>r.json());
+  mem.notes.splice(idx,1);
+  await fetch('/update-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes:mem.notes})});
+  renderNotes(mem.notes);
+  renderNotesModal();
+}
+
+async function addNoteFromModal(){
+  const inp=document.getElementById('noteAddFull');
+  const note=inp.value.trim();if(!note)return;
+  inp.value='';
+  await fetch('/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note})});
+  const mem=await fetch('/memory').then(r=>r.json());
+  renderNotes(mem.notes||[]);
+  renderNotesModal();
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+function openProfileModal(){fetch('/profile').then(r=>r.json()).then(p=>{document.getElementById('pName').value=p.name||'';document.getElementById('pGoals').value=p.goals||'';document.getElementById('pProjects').value=p.current_projects||'';document.getElementById('pRoutine').value=p.daily_routine||'';document.getElementById('pAbout').value=p.about||'';});document.getElementById('profileModal').classList.add('open');}
+function closeProfileModal(){document.getElementById('profileModal').classList.remove('open');}
+async function saveProfile(){const profile={name:document.getElementById('pName').value.trim(),goals:document.getElementById('pGoals').value.trim(),current_projects:document.getElementById('pProjects').value.trim(),daily_routine:document.getElementById('pRoutine').value.trim(),about:document.getElementById('pAbout').value.trim()};await fetch('/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});closeProfileModal();applyProfileUI(profile);appendMsg('assistant',profile.name?`profile save ho gayi ${profile.name}. ab Chotu ko pata hai tu kaun hai. 🫡`:'profile update.');}
+function applyProfileUI(p){const mini=document.getElementById('profileMini'),n=document.getElementById('profileMiniName'),g=document.getElementById('profileMiniGoals'),b=document.getElementById('profileBadge');if(p.name){mini.classList.add('filled');n.textContent=p.name;b.textContent=`👤 ${p.name.toUpperCase()}`;b.classList.add('set');if(p.goals){g.textContent=p.goals;g.style.display='block';}}else{n.textContent='Not set';g.style.display='none';b.textContent='👤 PROFILE';b.classList.remove('set');}}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+async function sendMessage(){const inp=document.getElementById('chatInput');const msg=inp.value.trim();if(!msg)return;inp.value='';inp.style.height='auto';stopSpeaking();if(focusTask)resetIdle();appendMsg('user',msg);chatHistory.push({role:'user',content:msg});const sendBtn=document.getElementById('sendBtn');sendBtn.disabled=true;const isSearch=/^(search|find|look up|lookup|google|find me|look for)\b/i.test(msg.trim());let typingEl;if(isSearch){document.getElementById('searchBadge').classList.add('active');document.getElementById('statusTxt').textContent='SEARCHING...';typingEl=appendSearching();}else typingEl=appendTyping();try{const res=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,history:chatHistory.slice(-12)})});const data=await res.json();typingEl.remove();document.getElementById('searchBadge').classList.remove('active');document.getElementById('statusTxt').textContent='ONLINE';if(!res.ok)throw new Error(data.detail||'server error');appendMsg('assistant',data.reply,data.searched?data.query:null);chatHistory.push({role:'assistant',content:data.reply});speak(data.reply);if(data.focus_task!==focusTask){focusTask=data.focus_task;if(!focusTask){focusStart=null;clearInterval(timerInterval);stopIdle();}else resetIdle();applyFocusUI();}}catch(e){typingEl.remove();document.getElementById('searchBadge').classList.remove('active');document.getElementById('statusTxt').textContent='ONLINE';appendMsg('assistant',`oof, error: ${e.message}`);}sendBtn.disabled=false;}
+
+function appendMsg(role,text,searchQuery=null){const wrap=document.getElementById('messages'),div=document.createElement('div');div.className=`msg ${role}`;let extra='';if(searchQuery)extra+=`<div class="search-pill">🔍 searched: ${escHtml(searchQuery)}</div>`;if(role==='assistant'){const t=text;extra+=`<button class="speak-btn" onclick="speakThis(this,${JSON.stringify(t).replace(/'/g,'&#39;')})">🔊 speak</button>`;}div.innerHTML=`<div class="msg-avatar">${role==='assistant'?'CHO':'YOU'}</div><div class="msg-body"><div class="msg-name">${role==='assistant'?'CHOTU':'YOU'}</div><div class="msg-text">${escHtml(text)}</div>${extra}</div>`;wrap.appendChild(div);wrap.scrollTop=wrap.scrollHeight;return div;}
+function speakThis(btn,text){if(speechSynthesis.speaking){stopSpeaking();btn.classList.remove('speaking');return;}btn.classList.add('speaking');const prev=ttsEnabled;ttsEnabled=true;speak(text);ttsEnabled=prev;if(currentUtterance)currentUtterance.onend=()=>{document.getElementById('ttsBar').classList.remove('visible');btn.classList.remove('speaking');};}
+function appendTyping(){const wrap=document.getElementById('messages'),div=document.createElement('div');div.className='msg assistant';div.innerHTML=`<div class="msg-avatar">CHO</div><div class="msg-body"><div class="msg-name">CHOTU</div><div class="msg-text"><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>`;wrap.appendChild(div);wrap.scrollTop=wrap.scrollHeight;return div;}
+function appendSearching(){const wrap=document.getElementById('messages'),div=document.createElement('div');div.className='msg assistant';div.innerHTML=`<div class="msg-avatar">CHO</div><div class="msg-body"><div class="msg-name">CHOTU</div><div class="searching-indicator"><span class="spin">⟳</span> searching the web...</div></div>`;wrap.appendChild(div);wrap.scrollTop=wrap.scrollHeight;return div;}
+function escHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+
+// ── Focus ─────────────────────────────────────────────────────────────────────
+function openFocusModal(){document.getElementById('focusModal').classList.add('open');setTimeout(()=>document.getElementById('focusInput').focus(),50);}
+function closeFocusModal(){document.getElementById('focusModal').classList.remove('open');document.getElementById('focusInput').value='';}
+async function startFocus(){const task=document.getElementById('focusInput').value.trim();if(!task)return;closeFocusModal();await fetch('/focus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});focusTask=task;focusStart=new Date();applyFocusUI();resetIdle();appendMsg('assistant',`theek hai. "${task}" — yahi karna hai. timer chalu. ja ab.`);chatHistory.push({role:'assistant',content:`Focus session started: ${task}`});}
+async function endFocus(){await fetch('/focus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task:null})});const elapsed=focusStart?formatElapsed(Date.now()-focusStart.getTime()):'?';focusTask=null;focusStart=null;clearInterval(timerInterval);timerInterval=null;stopIdle();applyFocusUI();appendMsg('assistant',`session khatam. ${elapsed} laga. not bad yaar, seriously.`);chatHistory.push({role:'assistant',content:'Focus session ended.'});}
+function applyFocusUI(){const card=document.getElementById('focusCard'),display=document.getElementById('focusTaskDisplay'),startBtn=document.getElementById('startFocusBtn'),banner=document.getElementById('focusBanner'),bTxt=document.getElementById('focusBannerText'),timer=document.getElementById('focusTimer');if(focusTask){card.classList.add('active');display.textContent=focusTask;display.classList.remove('empty');bTxt.textContent=`FOCUS: ${focusTask}`;banner.classList.add('visible');startBtn.textContent='END SESSION';startBtn.className='btn btn-danger';startBtn.onclick=endFocus;clearInterval(timerInterval);timerInterval=setInterval(()=>{timer.textContent=formatElapsed(Date.now()-focusStart.getTime());},1000);timer.textContent=formatElapsed(Date.now()-focusStart.getTime());}else{card.classList.remove('active');display.textContent='No active session';display.classList.add('empty');timer.textContent='00:00:00';banner.classList.remove('visible');startBtn.textContent='START SESSION';startBtn.className='btn btn-primary';startBtn.onclick=openFocusModal;}}
+function formatElapsed(ms){const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;}
+
+// ── Notes sidebar ─────────────────────────────────────────────────────────────
+function renderNotes(notes){const list=document.getElementById('noteList');list.innerHTML='';notes.slice(-5).reverse().forEach(n=>{const d=document.createElement('div');d.className='note-item';d.textContent=n;list.appendChild(d);});}
+async function addNote(){const inp=document.getElementById('noteInput'),note=inp.value.trim();if(!note)return;inp.value='';await fetch('/note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note})});const mem=await fetch('/memory').then(r=>r.json());renderNotes(mem.notes||[]);}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+const chatInput=document.getElementById('chatInput');
+chatInput.addEventListener('input',()=>{chatInput.style.height='auto';chatInput.style.height=Math.min(chatInput.scrollHeight,140)+'px';});
+chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
+document.getElementById('focusInput').addEventListener('keydown',e=>{if(e.key==='Enter')startFocus();if(e.key==='Escape')closeFocusModal();});
+document.getElementById('noteInput').addEventListener('keydown',e=>{if(e.key==='Enter')addNote();});
+document.getElementById('noteAddFull').addEventListener('keydown',e=>{if(e.key==='Enter')addNoteFromModal();});
+document.addEventListener('keydown',e=>{const skip=['chatInput','noteInput','focusInput','pName','pGoals','pProjects','pRoutine','pAbout','noteAddFull'];if(e.code==='Space'&&!skip.includes(document.activeElement.id)){e.preventDefault();toggleVoice();}});
+
+speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices();
+if(speechSynthesis.getVoices().length===0)speechSynthesis.addEventListener('voiceschanged',()=>speechSynthesis.getVoices(),{once:true});
+
+init();
+</script>
+</body>
+</html>

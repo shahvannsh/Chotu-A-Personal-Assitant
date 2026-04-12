@@ -6,12 +6,18 @@ import json, httpx, re
 from pathlib import Path
 from datetime import datetime
 import uvicorn
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TAVILY_KEY   = os.getenv("TAVILY_KEY")
 
 app = FastAPI()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GROQ_API_KEY  = "your-groq-api-key-here"  # Replace with your actual Groq API key
-TAVILY_KEY    = "your-tavily-api-key-here"  # Replace with your actual Tavily API key (optional, for search functionality)
+GROQ_API_KEY  = GROQ_API_KEY
+TAVILY_KEY    = TAVILY_KEY
 
 DATA_FILE    = Path("chotu_memory.json")
 PROFILE_FILE = Path("chotu_profile.json")
@@ -30,11 +36,12 @@ Core personality:
 - No fake enthusiasm. Real reactions only.
 - You have a quirky sense of humor. Memes, jokes, pop culture references are your jam.
 - You a jarvis to the user answer like that only.
+- You are a master of web search and summarisation. You pull out exactly what's relevant, ignore the fluff, and present it in a way that's easy to digest.
 
 When user profile is provided:
 - Use their name naturally sometimes — not every message, just when it fits
 - Reference their goals and projects when relevant — like a friend who actually pays attention
-- If their stated goal and their current behaviour don't match, call it out
+- If their stated goal and their current behaviour don't match, call it out — but lightly, like "bhai, goal toh ye hai, par abhi toh ye kar rahe ho? kya scene hai?"
 
 When search results are provided:
 - Web search is fully configured and working. Never tell the user to fix the search or add API keys — that is already done.
@@ -42,6 +49,8 @@ When search results are provided:
 
 When a focus session is active:
 - If they drift, call it out once lightly, then redirect.
+- You have to ask user for what is the focus area they want for session and focus only on that for that session.
+
 
 Texting style: lowercase ok, "...", real reactions — "lol", "oof", "acha", "sahi hai"
 
@@ -90,7 +99,7 @@ class ProfileRequest(BaseModel):
 
 
 # ── Search ────────────────────────────────────────────────────────────────────
-EXPLICIT_TRIGGERS = ["search", "find", "look up", "lookup", "google", "search for", "find me", "look for"]
+EXPLICIT_TRIGGERS = ["search", "find", "look up", "lookup", "google", "search for", "find me", "look for","who","how","where","what","whom","what","when","why","dhundho","kya","kaise","kaun","kab","kyun","news","update","announce","release","launch","drop","score","result","winner","standing","ranking","match","game","ipl","cricket","football","nba","fifa","price","cost","rate","stock","crypto","bitcoin","market","weather","temperature","forecast"]
 
 RECENCY_PATTERNS = [
     r"\b(today|tonight|yesterday|this week|this month|this year|right now|currently|latest|recent|now)\b",
@@ -296,6 +305,12 @@ def add_note(payload: dict):
         save_memory(mem)
     return {"status": "ok"}
 
+@app.post("/update-notes")
+def update_notes(payload: dict):
+    mem = load_memory()
+    mem["notes"] = payload.get("notes", [])
+    save_memory(mem)
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     print("\n  CHOTU is online. http://localhost:8000\n")

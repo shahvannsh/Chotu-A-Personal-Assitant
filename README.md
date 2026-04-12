@@ -20,6 +20,9 @@ Built by a student, for students. Runs entirely on your machine.
 - 🧠 Persistent memory — knows your name, goals, projects across restarts
 - 📝 Quick notes — sidebar notes saved to disk
 - 🚀 Auto-launches on Windows startup
+- 🔔 Idle detection — sound + banner + quote after 5min idle during focus
+- 📝 Notes manager — view, edit, delete all notes
+- 🎨 Theme switcher — Default dark + Spider-Man classic
 
 ---
 

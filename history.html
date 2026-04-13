@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chotu — History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#111d2e;
+  --border:rgba(240,237,230,0.08);--border-hi:rgba(240,237,230,0.18);
+  --accent:#00c8ff;--warn:#ff6b35;--green:#22c55e;--gold:#f5c842;
+  --text:#c9d1d9;--text-dim:#4a5568;--text-hi:#e6edf3;
+  --red:#e01020;--blue:#1a2f6e;
+  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,200,255,0.008) 2px,rgba(0,200,255,0.008) 4px);pointer-events:none;z-index:0;}
+
+/* topbar */
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:0 32px;height:60px;background:var(--surface);border-bottom:1px solid var(--border-hi);}
+.logo{font-family:var(--mono);font-size:18px;color:var(--accent);letter-spacing:4px;text-shadow:0 0 20px rgba(0,200,255,0.4);}
+.logo span{color:var(--text-dim);font-size:10px;letter-spacing:2px;margin-left:8px;}
+.back-btn{margin-left:auto;font-family:var(--mono);font-size:11px;padding:6px 14px;border-radius:4px;border:1px solid var(--border-hi);color:var(--text-dim);background:transparent;cursor:pointer;text-decoration:none;letter-spacing:1px;transition:all .15s;}
+.back-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* main */
+.page{max-width:900px;margin:0 auto;padding:32px 24px;position:relative;z-index:1;}
+
+/* stat cards */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;}
+.stat-card{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px 24px;position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-card:hover{border-color:var(--accent);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.stat-card.today::before{background:var(--accent);}
+.stat-card.week::before{background:var(--gold);}
+.stat-card.streak::before{background:var(--warn);}
+.stat-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;}
+.stat-value{font-family:'Bangers',cursive;font-size:40px;letter-spacing:2px;line-height:1;}
+.stat-card.today .stat-value{color:var(--accent);}
+.stat-card.week  .stat-value{color:var(--gold);}
+.stat-card.streak .stat-value{color:var(--warn);}
+.stat-sub{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;}
+
+/* bar chart */
+.chart-section{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:24px;margin-bottom:32px;}
+.section-title{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:20px;}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px;}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;}
+.bar-wrap{width:100%;display:flex;align-items:flex-end;justify-content:center;height:90px;}
+.bar{width:100%;border-radius:3px 3px 0 0;background:var(--accent);opacity:.7;transition:opacity .2s;min-height:2px;}
+.bar:hover{opacity:1;}
+.bar.today-bar{background:var(--accent);opacity:1;box-shadow:0 0 10px rgba(0,200,255,0.3);}
+.bar-label{font-family:var(--mono);font-size:9px;color:var(--text-dim);text-align:center;}
+.bar-val{font-family:var(--mono);font-size:9px;color:var(--text-dim);text-align:center;}
+.no-data{font-family:var(--mono);font-size:12px;color:var(--text-dim);text-align:center;padding:30px;font-style:italic;}
+
+/* session list */
+.list-section{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:24px;}
+.list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.session-list{display:flex;flex-direction:column;gap:8px;}
+.session-item{display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;transition:border-color .15s;}
+.session-item:hover{border-color:var(--border-hi);}
+.session-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.session-task{flex:1;font-size:14px;font-weight:600;color:var(--text-hi);word-break:break-word;}
+.session-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;}
+.session-dur{font-family:var(--mono);font-size:12px;color:var(--accent);}
+.session-date{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+.session-time{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+.empty-state{font-family:var(--mono);font-size:13px;color:var(--text-dim);text-align:center;padding:40px 20px;}
+.empty-state strong{display:block;font-size:16px;color:var(--text-dim);margin-bottom:8px;}
+
+/* streak badge */
+.streak-fire{font-size:28px;line-height:1;}
+.streak-days{font-family:'Bangers',cursive;font-size:40px;color:var(--warn);letter-spacing:2px;}
+
+/* loading */
+.loading{font-family:var(--mono);font-size:12px;color:var(--text-dim);text-align:center;padding:60px;letter-spacing:2px;}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+.loading span{animation:blink 1.2s infinite;}
+.loading span:nth-child(2){animation-delay:.2s;}
+.loading span:nth-child(3){animation-delay:.4s;}
+
+/* responsive */
+@media(max-width:600px){
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .stat-card.streak{grid-column:1/-1;}
+  .session-meta{display:none;}
+}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div>
+    <span class="logo">CHOTU <span>SESSION HISTORY</span></span>
+  </div>
+  <a href="/" class="back-btn">← BACK TO CHAT</a>
+</nav>
+
+<div class="page" id="page">
+  <div class="loading">loading<span>.</span><span>.</span><span>.</span></div>
+</div>
+
+<script>
+async function load(){
+  const res  = await fetch('/sessions').catch(()=>null);
+  if(!res||!res.ok){ document.getElementById('page').innerHTML='<div class="loading">failed to load data</div>'; return; }
+  const data = await res.json();
+  render(data);
+}
+
+function fmt(secs){
+  const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60),s=secs%60;
+  if(h)return`${h}h ${m}m`;
+  if(m)return`${m}m ${s}s`;
+  return`${s}s`;
+}
+
+function render(data){
+  const {sessions,stats,fmt:f}=data;
+  const today=new Date().toISOString().slice(0,10);
+
+  // ── stat cards ──
+  const streakDisplay=stats.streak===0
+    ?`<div class="stat-value" style="font-size:32px;color:var(--text-dim)">0</div><div class="stat-sub">start a session today!</div>`
+    :`<div style="display:flex;align-items:center;gap:8px"><div class="streak-days">${stats.streak}</div><div style="font-size:28px">🔥</div></div><div class="stat-sub">${stats.streak===1?'1 day':'consecutive days'}</div>`;
+
+  // ── bar chart — last 14 days ──
+  const days=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const iso=d.toISOString().slice(0,10);
+    const label=['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+    days.push({iso,label,secs:stats.daily[iso]||0});
+  }
+  const maxSecs=Math.max(...days.map(d=>d.secs),1);
+
+  const bars=days.map(d=>{
+    const pct=Math.max((d.secs/maxSecs)*100,0);
+    const isToday=d.iso===today;
+    const val=d.secs>0?fmt(d.secs):'';
+    return`<div class="bar-col">
+      <div class="bar-val">${val}</div>
+      <div class="bar-wrap"><div class="bar${isToday?' today-bar':''}" style="height:${pct}%"></div></div>
+      <div class="bar-label" style="${isToday?'color:var(--accent)':''}">${label}</div>
+    </div>`;
+  }).join('');
+
+  // ── session list ──
+  let listHTML='';
+  if(!sessions.length){
+    listHTML=`<div class="empty-state"><strong>No sessions yet</strong>Start a focus session in Chotu to see your history here.</div>`;
+  } else {
+    listHTML=sessions.map(s=>{
+      const start=new Date(s.start);
+      const timeStr=start.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const dateStr=start.toLocaleDateString([],{month:'short',day:'numeric'});
+      const isToday=s.date===today;
+      return`<div class="session-item">
+        <div class="session-dot" style="${isToday?'background:var(--accent)':'background:var(--text-dim)'}"></div>
+        <div class="session-task">${escHtml(s.task)}</div>
+        <div class="session-meta">
+          <div class="session-dur">${fmt(s.duration)}</div>
+          <div class="session-date">${isToday?'today':dateStr}</div>
+          <div class="session-time">${timeStr}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('page').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card today">
+        <div class="stat-label">Today</div>
+        <div class="stat-value">${f.today||'0m'}</div>
+        <div class="stat-sub">focus time</div>
+      </div>
+      <div class="stat-card week">
+        <div class="stat-label">This week</div>
+        <div class="stat-value">${f.week||'0m'}</div>
+        <div class="stat-sub">last 7 days</div>
+      </div>
+      <div class="stat-card streak">
+        <div class="stat-label">Streak</div>
+        ${streakDisplay}
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="section-title">Daily focus — last 14 days</div>
+      ${days.every(d=>d.secs===0)
+        ?'<div class="no-data">No sessions in the last 14 days. Start one now.</div>'
+        :`<div class="bar-chart">${bars}</div>`
+      }
+    </div>
+
+    <div class="list-section">
+      <div class="list-header">
+        <div class="section-title" style="margin:0">Session log</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${sessions.length} total</div>
+      </div>
+      <div class="session-list">${listHTML}</div>
+    </div>`;
+}
+
+function escHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+load();
+// auto-refresh every 30 seconds if page is open
+setInterval(load, 30000);
+</script>
+</body>
+</html>

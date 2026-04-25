@@ -1,6 +1,6 @@
 import httpx, json
 
-key = "your key"
+key = "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"
 
 r = httpx.post("https://api.tavily.com/search", json={
     "api_key": key,

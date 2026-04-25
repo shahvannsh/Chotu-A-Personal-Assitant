@@ -370,16 +370,32 @@ body::after{content:'';position:fixed;inset:0;background:var(--web-overlay);poin
       </div>
     </div>
     <div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
       <a href="/history" target="_blank" style="
-        display:block; font-family:var(--mono); font-size:10px;
-        color:var(--text-dim); letter-spacing:3px; text-decoration:none;
-        padding:10px 12px; background:var(--surface2);
-        border:1px solid var(--border-hi); border-radius:6px;
+        display:flex;align-items:center;gap:10px;
+        font-family:var(--mono);font-size:10px;
+        color:var(--text-dim);letter-spacing:2px;text-decoration:none;
+        padding:10px 12px;background:var(--surface2);
+        border:1px solid var(--border-hi);border-radius:6px;
         transition:all .15s;
-      " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-         onmouseout="this.style.borderColor='var(--border-hi)';this.style.color='var(--text-dim)'">
+      "
+      onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+      onmouseout="this.style.borderColor='';this.style.color=''">
         📊 SESSION HISTORY →
       </a>
+      <a href="/study" target="_blank" style="
+        display:flex;align-items:center;gap:10px;
+        font-family:var(--mono);font-size:10px;
+        color:var(--text-dim);letter-spacing:2px;text-decoration:none;
+        padding:10px 12px;background:var(--surface2);
+        border:1px solid var(--border-hi);border-radius:6px;
+        transition:all .15s;
+      "
+      onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'"
+      onmouseout="this.style.borderColor='';this.style.color=''">
+        📚 STUDY MODE →
+      </a>
+      </div>
     </div>
     <div>
       <div class="section-label">🔍 SEARCH</div>

@@ -54,31 +54,26 @@ Built by a student, for students. Runs entirely on your machine.
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chotu.git
-cd chotu
+git clone https://github.com/shahvannsh/Chotu-A-Personal-Assitant.git
+cd Chotu-A-Personal-Assitant
 ```
 
 ### 2. Install dependencies
 
 ```bash
-pip install fastapi uvicorn groq httpx==0.27.0 python-dotenv
+pip install -r requirements.txt
 ```
-
-> **Python 3.13 users** — pin these exact versions to avoid httpx/groq conflicts:
-> ```bash
-> pip uninstall groq httpx anyio -y
-> pip install anyio==4.4.0 httpx==0.27.0 groq==0.11.0
-> pip install fastapi uvicorn
-> ```
 
 ### 3. Add your API keys
 
-Open `server.py` and replace lines 14–15:
+Create a `.env` file in the project root:
 
-```python
-GROQ_API_KEY  = "your-groq-key-here"
-TAVILY_KEY    = "your-tavily-key-here"
+```env
+GROQ_API_KEY=your-groq-key-here
+TAVILY_KEY=your-tavily-key-here
 ```
+
+`server.py` already loads these keys automatically via `python-dotenv`.
 
 Get your keys:
 - Groq → [console.groq.com](https://console.groq.com) → API Keys
@@ -149,11 +144,18 @@ Every message also has a `🔊 speak` button for on-demand playback.
 ## Project structure
 
 ```
-chotu/
-├── server.py              # FastAPI backend — all routes and logic
-├── index.html             # Frontend — entire UI in one file
-├── chotu_memory.json      # Auto-created — focus sessions, notes, history
-├── chotu_profile.json     # Auto-created — your persistent profile
+Chotu-A-Personal-Assitant/
+├── server.py              # FastAPI backend — chat, memory, API routes
+├── study_routes.py        # Study mode routes and exam helpers
+├── index.html             # Main assistant UI
+├── study.html             # Study mode UI
+├── history.html           # Session/history UI
+├── quick_capture.py       # Fast capture helper
+├── streak_notifier.py     # Streak/reminder utility
+├── requirements.txt       # Python dependencies
+├── chotu_memory.json      # Auto-created local memory (ignored by git)
+├── chotu_profile.json     # Auto-created profile data (ignored by git)
+├── chotu_sessions.json    # Auto-created session tracking
 └── launch_chotu.bat       # Windows startup launcher
 ```
 
@@ -163,16 +165,7 @@ chotu/
 
 **Never commit your API keys to GitHub.**
 
-Before pushing, replace your keys in `server.py` with placeholders, or use a `.env` file:
-
-```python
-# server.py
-from dotenv import load_dotenv
-import os
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_KEY   = os.getenv("TAVILY_KEY")
-```
+Use a `.env` file (already supported by default):
 
 ```env
 # .env  ← add this to .gitignore

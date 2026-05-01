@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chotu — History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080c10;--surface:#0d1117;--surface2:#111d2e;
+  --border:rgba(240,237,230,0.08);--border-hi:rgba(240,237,230,0.18);
+  --accent:#00c8ff;--warn:#ff6b35;--green:#22c55e;--gold:#f5c842;
+  --text:#c9d1d9;--text-dim:#4a5568;--text-hi:#e6edf3;
+  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+}
+[data-theme="spidey"]{
+  --bg:#0E1628;--surface:#111D35;--surface2:#162040;
+  --border:rgba(240,237,230,0.10);--border-hi:rgba(240,237,230,0.22);
+  --accent:#E01020;--gold:#F5C842;--green:#F5C842;--warn:#F5C842;
+  --text:#F0EDE6;--text-dim:rgba(240,237,230,0.45);--text-hi:#F0EDE6;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,200,255,0.008) 2px,rgba(0,200,255,0.008) 4px);pointer-events:none;z-index:0;}
+[data-theme="spidey"] body::before{background:repeating-conic-gradient(rgba(224,16,32,0.03) 0deg,transparent 1deg,transparent 14deg,rgba(224,16,32,0.03) 15deg);background-size:60px 60px;}
+
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:0 32px;height:60px;background:var(--surface);border-bottom:2px solid var(--accent);}
+.logo{font-family:'Bangers',cursive;font-size:22px;color:var(--accent);letter-spacing:4px;}
+[data-theme="default"] .logo{font-family:'Share Tech Mono',monospace;font-size:18px;}
+.logo span{font-family:'Share Tech Mono',monospace;color:var(--text-dim);font-size:10px;letter-spacing:2px;margin-left:8px;}
+.nav-links{display:flex;gap:8px;}
+.nav-btn{font-family:var(--mono);font-size:10px;padding:5px 12px;border-radius:3px;border:1px solid var(--border-hi);color:var(--text-dim);background:transparent;cursor:pointer;text-decoration:none;letter-spacing:1px;transition:all .15s;}
+.nav-btn:hover,.nav-btn.active{border-color:var(--accent);color:var(--accent);}
+.back-btn{margin-left:auto;font-family:var(--mono);font-size:10px;padding:5px 12px;border-radius:3px;border:1px solid var(--border-hi);color:var(--text-dim);background:transparent;cursor:pointer;text-decoration:none;letter-spacing:1px;transition:all .15s;}
+.back-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+.page{max-width:900px;margin:0 auto;padding:32px 24px;position:relative;z-index:1;}
+
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;}
+.stat-card{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px 24px;position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-card:hover{border-color:var(--accent);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.stat-card.today-card::before{background:var(--accent);}
+.stat-card.week-card::before{background:var(--gold);}
+.stat-card.streak-card::before{background:var(--warn);}
+.stat-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;}
+.stat-value{font-family:'Bangers',cursive;font-size:40px;letter-spacing:2px;line-height:1;}
+.stat-card.today-card .stat-value{color:var(--accent);}
+.stat-card.week-card  .stat-value{color:var(--gold);}
+.stat-card.streak-card .stat-value{color:var(--warn);}
+.stat-sub{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;}
+
+.chart-section{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:24px;margin-bottom:32px;}
+.section-title{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:20px;}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:130px;}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;min-width:0;}
+.bar-wrap{width:100%;display:flex;align-items:flex-end;justify-content:center;height:90px;}
+.bar-el{width:100%;border-radius:3px 3px 0 0;background:rgba(0,200,255,0.4);transition:background .2s;min-height:2px;}
+.bar-el:hover{background:var(--accent);}
+.bar-el.today-bar{background:var(--accent);box-shadow:0 0 10px rgba(0,200,255,0.3);}
+[data-theme="spidey"] .bar-el{background:rgba(224,16,32,0.4);}
+[data-theme="spidey"] .bar-el:hover,[data-theme="spidey"] .bar-el.today-bar{background:#E01020;}
+.bar-lbl{font-family:var(--mono);font-size:9px;color:var(--text-dim);text-align:center;white-space:nowrap;}
+.bar-val{font-family:var(--mono);font-size:9px;color:var(--text-dim);text-align:center;min-height:12px;}
+.no-data{font-family:var(--mono);font-size:12px;color:var(--text-dim);text-align:center;padding:30px;font-style:italic;}
+
+.list-section{background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:24px;}
+.list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.session-list{display:flex;flex-direction:column;gap:8px;}
+.session-item{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;transition:border-color .15s;}
+.session-item:hover{border-color:var(--border-hi);}
+.session-dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex-shrink:0;}
+.session-dot.is-today{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+.session-task{flex:1;font-size:14px;font-weight:600;color:var(--text-hi);word-break:break-word;}
+.session-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;}
+.session-dur{font-family:var(--mono);font-size:12px;color:var(--accent);}
+.session-date{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+.session-time{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+.empty-state{font-family:var(--mono);font-size:13px;color:var(--text-dim);text-align:center;padding:40px 20px;}
+.empty-state strong{display:block;font-size:16px;margin-bottom:8px;}
+
+.loading{font-family:var(--mono);font-size:12px;color:var(--text-dim);text-align:center;padding:80px;letter-spacing:2px;}
+
+@media(max-width:600px){
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .stat-card.streak-card{grid-column:1/-1;}
+  .session-meta{display:none;}
+}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="logo" id="navLogo">CHOTU <span>SESSION HISTORY</span></div>
+  <div class="nav-links">
+    <a href="/" class="nav-btn">💬 CHAT</a>
+    <a href="/study" class="nav-btn">📚 STUDY</a>
+    <a href="/history" class="nav-btn active">📊 HISTORY</a>
+  </div>
+  <a href="/" class="back-btn">← BACK</a>
+</nav>
+
+<div class="page" id="page">
+  <div class="loading">loading sessions...</div>
+</div>
+
+<script>
+// apply saved theme
+const savedTheme = localStorage.getItem('chotu-theme') || 'default';
+document.documentElement.setAttribute('data-theme', savedTheme);
+if (savedTheme === 'spidey') {
+  document.getElementById('navLogo').style.fontFamily = "'Bangers', cursive";
+}
+
+function fmtDur(secs) {
+  secs = Math.floor(secs);
+  var h = Math.floor(secs / 3600);
+  var m = Math.floor((secs % 3600) / 60);
+  var s = secs % 60;
+  if (h > 0) return h + 'h ' + m + 'm';
+  if (m > 0) return m + 'm ' + s + 's';
+  return s + 's';
+}
+
+function escHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function getTodayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function getDayStr(offsetDays) {
+  var d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function getDayLabel(offsetDays) {
+  var d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+}
+
+async function load() {
+  try {
+    var res = await fetch('/sessions');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    render(data);
+  } catch(e) {
+    document.getElementById('page').innerHTML = '<div class="loading">failed to load — is Chotu running? open <a href="http://localhost:8000/history" style="color:var(--accent)">localhost:8000/history</a></div>';
+  }
+}
+
+function render(data) {
+  var sessions = data.sessions || [];
+  var stats    = data.stats || {};
+  var fmtData  = data.fmt || {};
+  var todayStr = getTodayStr();
+
+  // ── stat cards ──
+  var todayDisplay = fmtData.today || '0m';
+  var weekDisplay  = fmtData.week  || '0m';
+  var streakCount  = stats.streak  || 0;
+
+  var streakHTML = streakCount === 0
+    ? '<div class="stat-value" style="font-size:28px;color:var(--text-dim)">0</div><div class="stat-sub">start a session today</div>'
+    : '<div style="display:flex;align-items:center;gap:8px"><div class="stat-value">' + streakCount + '</div><div style="font-size:28px">🔥</div></div><div class="stat-sub">' + (streakCount === 1 ? '1 day' : streakCount + ' consecutive days') + '</div>';
+
+  // ── bar chart — last 14 days ──
+  var dailyMap = stats.daily || {};
+  var chartDays = [];
+  for (var i = 13; i >= 0; i--) {
+    var iso = getDayStr(i);
+    var lbl = getDayLabel(i);
+    var secs = dailyMap[iso] || 0;
+    chartDays.push({ iso: iso, lbl: lbl, secs: secs });
+  }
+
+  var maxSecs = 1;
+  for (var j = 0; j < chartDays.length; j++) {
+    if (chartDays[j].secs > maxSecs) maxSecs = chartDays[j].secs;
+  }
+
+  var hasAnyData = maxSecs > 1;
+
+  var barsHTML = '';
+  for (var k = 0; k < chartDays.length; k++) {
+    var day = chartDays[k];
+    var pct = Math.max((day.secs / maxSecs) * 100, 0);
+    var isToday = day.iso === todayStr;
+    var valStr = day.secs > 0 ? fmtDur(day.secs) : '';
+    barsHTML += '<div class="bar-col">'
+      + '<div class="bar-val">' + escHtml(valStr) + '</div>'
+      + '<div class="bar-wrap"><div class="bar-el' + (isToday ? ' today-bar' : '') + '" style="height:' + pct.toFixed(1) + '%"></div></div>'
+      + '<div class="bar-lbl" style="' + (isToday ? 'color:var(--accent)' : '') + '">' + escHtml(day.lbl) + '</div>'
+      + '</div>';
+  }
+
+  // ── session list ──
+  var listHTML = '';
+  if (sessions.length === 0) {
+    listHTML = '<div class="empty-state"><strong>No sessions yet</strong>Start a focus session in Chotu, end it properly — it will appear here.</div>';
+  } else {
+    for (var n = 0; n < sessions.length; n++) {
+      var s = sessions[n];
+      var startDt  = new Date(s.start);
+      var timeStr  = startDt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      var dateStr  = startDt.toLocaleDateString([], {month:'short', day:'numeric'});
+      var isToday2 = s.date === todayStr;
+      listHTML += '<div class="session-item">'
+        + '<div class="session-dot' + (isToday2 ? ' is-today' : '') + '"></div>'
+        + '<div class="session-task">' + escHtml(s.task) + '</div>'
+        + '<div class="session-meta">'
+        + '<div class="session-dur">' + fmtDur(s.duration) + '</div>'
+        + '<div class="session-date">' + (isToday2 ? 'today' : escHtml(dateStr)) + '</div>'
+        + '<div class="session-time">' + escHtml(timeStr) + '</div>'
+        + '</div></div>';
+    }
+  }
+
+  document.getElementById('page').innerHTML =
+    '<div class="stats-grid">'
+    + '<div class="stat-card today-card"><div class="stat-label">Today</div><div class="stat-value">' + escHtml(todayDisplay) + '</div><div class="stat-sub">focus time</div></div>'
+    + '<div class="stat-card week-card"><div class="stat-label">This week</div><div class="stat-value">' + escHtml(weekDisplay) + '</div><div class="stat-sub">last 7 days</div></div>'
+    + '<div class="stat-card streak-card"><div class="stat-label">Streak</div>' + streakHTML + '</div>'
+    + '</div>'
+    + '<div class="chart-section">'
+    + '<div class="section-title">Daily focus — last 14 days</div>'
+    + (hasAnyData ? '<div class="bar-chart">' + barsHTML + '</div>' : '<div class="no-data">No sessions in the last 14 days. Start one now.</div>')
+    + '</div>'
+    + '<div class="list-section">'
+    + '<div class="list-header"><div class="section-title" style="margin:0">Session log</div><div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">' + sessions.length + ' total</div></div>'
+    + '<div class="session-list">' + listHTML + '</div>'
+    + '</div>';
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

@@ -30,7 +30,7 @@ MEMORY_FILE   = Path(r"C:\Users\itsva\Desktop\my_jarvis\chotu_memory.json")
 # Times to check (24h format)
 NOTIFY_TIMES = [
     (10, 0),   # 10:00 AM
-    (11, 0),   # 11:00 AM
+    (12, 0),   # 11:00 AM
 ]
 
 APP_NAME = "Chotu"

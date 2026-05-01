@@ -1,31 +1,6 @@
-# API keys and environment
 .env
-
-# Personal data — don't commit your profile or history
-chotu_memory.json
-chotu_profile.json
-ms_token.json
-
-# Python
+.idea/
+.venv/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-
-# Logs
-logs/
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Audio temp files
-audio/
-*.mp3
-*.wav
+chotu.db

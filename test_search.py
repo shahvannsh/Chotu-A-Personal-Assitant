@@ -1,6 +1,8 @@
-import httpx, json
+import httpx, json, os
 
-key = "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"
+key = os.getenv("TAVILY_KEY", "")
+if not key:
+    raise RuntimeError("Set TAVILY_KEY in environment before running this script.")
 
 r = httpx.post("https://api.tavily.com/search", json={
     "api_key": key,

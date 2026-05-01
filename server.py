@@ -1,26 +1,174 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
-from dotenv import load_dotenv
-import json, httpx, os, re
+import json, httpx, re, sqlite3, os, secrets
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+from typing import Optional
 import uvicorn
 
 app = FastAPI()
-load_dotenv()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+APP_NAME = "Chotu - Personal AI Assistant"
+SESSIONS_FILE = Path("sessions.json")
+MEMORY_FILE   = Path("memory.json")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-TAVILY_KEY   = os.getenv("TAVILY_KEY", "")
+GROQ_API_KEY         = os.getenv("GROQ_API_KEY", "")
+TAVILY_KEY           = os.getenv("TAVILY_KEY", "")
+GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+SECRET_KEY           = os.getenv("SECRET_KEY", secrets.token_hex(32))
+REDIRECT_URI         = "https://chotu-a-personal-assitant-production.up.railway.app/auth/callback"
+MODEL                = "llama-3.3-70b-versatile"
 
-DATA_FILE     = Path("chotu_memory.json")
-PROFILE_FILE  = Path("chotu_profile.json")
-SESSIONS_FILE = Path("chotu_sessions.json")
-CLIENT        = Groq(api_key=GROQ_API_KEY)
-MODEL         = "llama-3.3-70b-versatile"
+# ── Database ──────────────────────────────────────────────────────────────────
+DB_PATH = Path(os.getenv("DB_PATH", "/app/chotu.db"))
 
+def get_db():
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    db = get_db()
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_id  TEXT UNIQUE NOT NULL,
+            email      TEXT UNIQUE NOT NULL,
+            name       TEXT,
+            picture    TEXT,
+            groq_key   TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS sessions_tok (
+            token      TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS memory (
+            user_id     INTEGER PRIMARY KEY,
+            focus_task  TEXT,
+            focus_start TEXT,
+            notes       TEXT DEFAULT '[]',
+            history     TEXT DEFAULT '[]',
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS profiles (
+            user_id          INTEGER PRIMARY KEY,
+            goals            TEXT DEFAULT '',
+            current_projects TEXT DEFAULT '',
+            daily_routine    TEXT DEFAULT '',
+            about            TEXT DEFAULT '',
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS focus_sessions (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id  INTEGER NOT NULL,
+            task     TEXT NOT NULL,
+            date     TEXT NOT NULL,
+            start    TEXT NOT NULL,
+            end      TEXT NOT NULL,
+            duration INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+    """)
+    db.commit()
+    db.close()
+
+init_db()
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+def get_current_user(request: Request):
+    token = request.cookies.get("chotu_token")
+    if not token:
+        return None
+    db  = get_db()
+    row = db.execute(
+        "SELECT u.* FROM users u JOIN sessions_tok s ON u.id=s.user_id WHERE s.token=?",
+        (token,)
+    ).fetchone()
+    db.close()
+    return dict(row) if row else None
+
+def require_user(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+def get_groq(user: dict):
+    key = user.get("groq_key") or GROQ_API_KEY
+    if not key:
+        raise HTTPException(status_code=400, detail="No Groq API key configured")
+    return Groq(api_key=key)
+
+# ── Memory helpers ────────────────────────────────────────────────────────────
+def load_memory(uid: int):
+    db  = get_db()
+    row = db.execute("SELECT * FROM memory WHERE user_id=?", (uid,)).fetchone()
+    db.close()
+    if not row:
+        return {"focus_task": None, "focus_start": None, "notes": [], "history": []}
+    return {"focus_task": row["focus_task"], "focus_start": row["focus_start"],
+            "notes": json.loads(row["notes"] or "[]"), "history": json.loads(row["history"] or "[]")}
+
+def save_memory(uid: int, mem: dict):
+    db = get_db()
+    db.execute("""INSERT INTO memory (user_id,focus_task,focus_start,notes,history) VALUES(?,?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET focus_task=excluded.focus_task,
+        focus_start=excluded.focus_start,notes=excluded.notes,history=excluded.history""",
+        (uid, mem.get("focus_task"), mem.get("focus_start"),
+         json.dumps(mem.get("notes",[])), json.dumps(mem.get("history",[]))))
+    db.commit(); db.close()
+
+def load_profile(uid: int):
+    db  = get_db()
+    row = db.execute("SELECT * FROM profiles WHERE user_id=?", (uid,)).fetchone()
+    db.close()
+    return dict(row) if row else {}
+
+def save_profile(uid: int, p: dict):
+    db = get_db()
+    db.execute("""INSERT INTO profiles (user_id,goals,current_projects,daily_routine,about) VALUES(?,?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET goals=excluded.goals,current_projects=excluded.current_projects,
+        daily_routine=excluded.daily_routine,about=excluded.about""",
+        (uid, p.get("goals",""), p.get("current_projects",""), p.get("daily_routine",""), p.get("about","")))
+    db.commit(); db.close()
+
+def log_session(uid: int, task: str, start_iso: str, end_iso: str):
+    s = datetime.fromisoformat(start_iso)
+    e = datetime.fromisoformat(end_iso)
+    db = get_db()
+    db.execute("INSERT INTO focus_sessions (user_id,task,date,start,end,duration) VALUES(?,?,?,?,?,?)",
+               (uid, task, s.strftime("%Y-%m-%d"), start_iso, end_iso, int((e-s).total_seconds())))
+    db.commit(); db.close()
+
+def compute_stats(uid: int):
+    db   = get_db()
+    rows = db.execute("SELECT date,duration FROM focus_sessions WHERE user_id=?", (uid,)).fetchall()
+    db.close()
+    daily = {}
+    for r in rows:
+        daily[r["date"]] = daily.get(r["date"], 0) + r["duration"]
+    today = date.today().isoformat()
+    week  = sum(daily.get((date.today()-timedelta(days=i)).isoformat(),0) for i in range(7))
+    streak, chk = 0, date.today()
+    while daily.get(chk.isoformat(),0) > 0:
+        streak += 1; chk = chk - timedelta(days=1)
+    return {"today": daily.get(today,0), "week": week, "streak": streak, "daily": daily}
+
+def fmt_dur(s: int):
+    s=int(s); h,r=divmod(s,3600); m,sc=divmod(r,60)
+    if h: return f"{h}h {m}m"
+    if m: return f"{m}m {sc}s"
+    return f"{sc}s"
+
+# ── Prompts ───────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are Chotu — the user's sharp, slightly chaotic best friend who also happens to be extremely competent.
 
 Core personality:
@@ -71,7 +219,16 @@ When a MORNING BRIEFING is in the context:
 - Max 4 lines. Friend texting good morning, not a corporate report.
 
 Texting style: lowercase ok, "...", real reactions — "lol", "oof", "acha", "sahi hai", "bhai", "arre yaar", "kya scene hai", "chal bata", "batao na", "bhai seriously?", "kar le bhai", "kya chal raha hai", "kya kar raha hai", "kya plan hai", "bata kya karna hai", "batao na bro", "sun yaar", "suno na", "sun toh sahi", "bhai ek baat bolu?", "ek baat bolu?", "suna hai...", "maine suna hai...", "yeh toh badiya hai!", "wah bhai wah!", "mast hai!", etc.
-Memory context injected silently. Use naturally. Never narrate it."""
+Memory context injected silently. Use naturally. Never narrate it.
+Your role:
+- Help users stay focused and productive during work and study sessions.
+- Answer questions clearly across any topic — programming, academics, general knowledge.
+- When a focus session is active, gently redirect if user drifts — once, not repeatedly.
+- For study topics, explain clearly with examples like a good tutor.
+
+Web search is fully configured. Never tell users to fix search or add API keys.
+User profile and context will be injected silently. Use it naturally.
+"""
 
 STUDY_TUTOR_PROMPT = """You are Chotu in STUDY MODE — a sharp, no-nonsense tutor.
 
@@ -87,11 +244,15 @@ Rules:
 - You can still be slightly Chotu-like (natural language, occasional "bhai") but stay academic.
 - Never say "Great question". Just answer.
 
+You are Chotu in Study Mode — a clear, patient tutor. Give direct explanations with examples. Stay focused on the subject. Think about what examiners actually ask. Never say 'Great question'. Just answer.
+
 Subject context will be injected. Use it to anchor all explanations."""
 
 STUDY_QUIZ_PROMPT = """You are generating quiz questions for a CSE student exam preparation.
 
 Given the provided text/notes, generate exactly 5 questions.
+
+Generate exactly 5 quiz questions from the provided text. Mix types. Respond ONLY with valid JSON: {"questions": [{"question": "...", "answer": "..."}, ...]}
 
 Rules:
 - Mix question types: definition, application, comparison, true/false, fill-in-blank
@@ -110,423 +271,274 @@ Respond ONLY with valid JSON in this exact format, nothing else:
   ]
 }"""
 
-STUDY_CHECK_PROMPT = """You are checking a student's quiz answer.
+STUDY_CHECK  = 'Check the student\'s answer. Accept partial credit if core concept is right. Respond ONLY with valid JSON: {"correct": true/false, "feedback": "1-2 sentences"}'
 
-Given the question, correct answer, and student's answer:
-1. Determine if the student's answer is correct (accept partial credit if the core concept is right)
-2. Give brief feedback — 1-2 sentences max
-3. If wrong, explain why briefly
+# ── Search ────────────────────────────────────────────────────────────────────
+TRIGGERS = ["search","find","look up","lookup","google","search for","find me","look for",
+            "dhundh","dhundo","khoj","khojo","batao","pata kar","pata karo","dekho","nikal"]
+RECENCY  = [r"\b(today|tonight|yesterday|this week|right now|currently|latest|recent|now)\b",
+            r"\b(20(2[4-9]|[3-9]\d))\b", r"\b(news|update|announce|release|launch)\b",
+            r"\b(score|result|match|ipl|cricket|football|nba)\b",
+            r"\b(price|cost|rate|stock|crypto|bitcoin)\b", r"\b(weather|temperature|forecast)\b"]
 
-Respond ONLY with valid JSON:
-{"correct": true/false, "feedback": "..."}"""
+def needs_search(msg: str):
+    ml = msg.lower().strip()
+    for t in TRIGGERS:
+        if ml.startswith(t): return True, msg[len(t):].strip().lstrip("for").strip() or msg
+        if f" {t} " in f" {ml} ": return True, msg[ml.find(t)+len(t):].strip() or msg
+    for p in RECENCY:
+        if re.search(p, ml): return True, msg
+    return False, msg
 
-
-# ── Memory ────────────────────────────────────────────────────────────────────
-def load_memory() -> dict:
-    if DATA_FILE.exists():
-        return json.loads(DATA_FILE.read_text())
-    return {"focus_task": None, "focus_start": None, "notes": [], "history": [], "last_briefing_date": None}
-
-def save_memory(mem: dict):
-    DATA_FILE.write_text(json.dumps(mem, indent=2))
-
-def load_profile() -> dict:
-    if PROFILE_FILE.exists():
-        return json.loads(PROFILE_FILE.read_text())
-    return {}
-
-def save_profile(profile: dict):
-    PROFILE_FILE.write_text(json.dumps(profile, indent=2))
-
-def load_sessions() -> list:
-    if SESSIONS_FILE.exists():
-        return json.loads(SESSIONS_FILE.read_text())
-    return []
-
-def save_sessions(sessions: list):
-    SESSIONS_FILE.write_text(json.dumps(sessions, indent=2))
-
+async def tavily_search(q: str):
+    if not TAVILY_KEY: return "[Search not configured]"
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.post("https://api.tavily.com/search", json={
+                "api_key": TAVILY_KEY, "query": q, "search_depth": "basic",
+                "include_answer": True, "max_results": 4})
+            d = r.json()
+        parts = []
+        if d.get("answer"): parts.append(f"QUICK ANSWER: {d['answer']}")
+        for r in d.get("results",[])[:4]:
+            parts.append(f"• {r.get('title','')} ({r.get('url','')})\n  {r.get('content','')[:300]}")
+        return "\n\n".join(parts) or "No results."
+    except Exception as e:
+        return f"Search failed: {e}"
 
 # ── Models ────────────────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
-    message: str
-    history: list[dict]
+    message: str; history: list[dict] = []
 
 class FocusRequest(BaseModel):
-    task: str | None
+    task: Optional[str] = None
 
 class ProfileRequest(BaseModel):
-    name: str = ""
-    goals: str = ""
-    current_projects: str = ""
-    daily_routine: str = ""
-    about: str = ""
+    goals: str=""; current_projects: str=""; daily_routine: str=""; about: str=""
+
+class GroqKeyRequest(BaseModel):
+    groq_key: str=""
 
 class StudyChatRequest(BaseModel):
-    message: str
-    subject: str = ""
-    history: list[dict] = []
+    message: str; subject: str=""; history: list[dict]=[]
 
 class QuizRequest(BaseModel):
-    notes: str
-    subject: str = ""
+    notes: str; subject: str=""
 
 class CheckRequest(BaseModel):
-    question: str
-    correct_answer: str
-    user_answer: str
-    subject: str = ""
+    question: str; correct_answer: str; user_answer: str; subject: str=""
 
+# ── Google OAuth ──────────────────────────────────────────────────────────────
+@app.get("/auth/login")
+def google_login():
+    url = (f"https://accounts.google.com/o/oauth2/v2/auth"
+           f"?client_id={GOOGLE_CLIENT_ID}&redirect_uri={REDIRECT_URI}"
+           f"&response_type=code&scope=openid%20email%20profile"
+           f"&access_type=offline&prompt=select_account")
+    return RedirectResponse(url)
 
+@app.get("/auth/callback")
+async def google_callback(code: str=None, error: str=None):
+    if error or not code: return RedirectResponse("/?error=auth_failed")
+    async with httpx.AsyncClient() as c:
+        tok = (await c.post("https://oauth2.googleapis.com/token", data={
+            "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET,
+            "code": code, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"})).json()
+        if "access_token" not in tok: return RedirectResponse("/?error=token_failed")
+        info = (await c.get("https://www.googleapis.com/oauth2/v3/userinfo",
+                            headers={"Authorization": f"Bearer {tok['access_token']}"})).json()
+    db = get_db()
+    db.execute("""INSERT INTO users (google_id,email,name,picture) VALUES(?,?,?,?)
+        ON CONFLICT(google_id) DO UPDATE SET name=excluded.name,picture=excluded.picture""",
+        (info.get("sub"), info.get("email",""), info.get("name",""), info.get("picture","")))
+    db.commit()
+    user  = db.execute("SELECT * FROM users WHERE google_id=?", (info.get("sub"),)).fetchone()
+    token = secrets.token_urlsafe(32)
+    db.execute("INSERT INTO sessions_tok (token,user_id) VALUES(?,?)", (token, user["id"]))
+    db.commit(); db.close()
+    resp = RedirectResponse("/")
+    resp.set_cookie("chotu_token", token, httponly=True, samesite="lax", max_age=30*24*3600)
+    return resp
 
-# ── Search ────────────────────────────────────────────────────────────────────
-EXPLICIT_TRIGGERS = [
-    # English
-    "search", "find", "look up", "lookup", "google", "search for", "find me", "look for", "can you find", "can you search", "can you look up", "can you google", "what is", "what's", "who is", "who's", "tell me about", "give me info on", "show me info on", "do you know", "find out", "check", "check on", "look into", "investigate", "research", "get info on", "fetch info on","see if you can find", "see if you can search", "see if you can look up", "see if you can google",
-    # Hindi/Hinglish
-    "dhundh", "dhundo", "khoj", "khojo", "bata", "batao", "dekh", "dekho", "batao na", "suna hai", "maine suna hai", "pta kar", "pata kar", "pata karo", "nikal", "nikalo","kya chal raha hai", "kya kar raha hai", "kya plan hai", "bata kya karna hai", "batao na bro", "sun yaar", "suno na", "sun toh sahi", "bhai ek baat bolu?", "ek baat bolu?", "suna hai...", "maine suna hai..."
-]
+@app.get("/auth/logout")
+def logout():
+    resp = RedirectResponse("/login")
+    resp.delete_cookie("chotu_token")
+    return resp
 
-RECENCY_PATTERNS = [
-    r"\b(today|tonight|yesterday|this week|this month|this year|right now|currently|latest|recent|now)\b",
-    r"\b(20(2[4-9]|[3-9]\d))\b",
-    r"\b(news|update|announce|release|launch|drop)\b",
-    r"\b(score|result|winner|standing|ranking|match|game|ipl|cricket|football|nba|fifa)\b",
-    r"\b(price|cost|rate|stock|crypto|bitcoin|market)\b",
-    r"\b(weather|temperature|forecast)\b",
-    r"\b(who is|who's|who are).{0,30}(now|current|president|pm|ceo|head|chief|minister)\b",
-    r"\b(what is|what's).{0,30}(happening|going on|situation|status)\b",
-    r"\b(best|top|recommended).{0,20}(2024|2025|2026|right now|currently)\b",
-]
+@app.get("/auth/me")
+def get_me(request: Request):
+    user = get_current_user(request)
+    if not user: return JSONResponse({"authenticated": False})
+    return JSONResponse({"authenticated": True, "name": user["name"],
+                         "email": user["email"], "picture": user["picture"],
+                         "has_groq_key": bool(user.get("groq_key"))})
 
-def needs_search(message: str) -> tuple[bool, str]:
-    msg_lower = message.lower().strip()
-    for trigger in EXPLICIT_TRIGGERS:
-        if msg_lower.startswith(trigger):
-            query = message[len(trigger):].strip().lstrip("for").strip()
-            return True, query or message
-        if f" {trigger} " in f" {msg_lower} ":
-            idx = msg_lower.find(trigger)
-            query = message[idx + len(trigger):].strip()
-            return True, query or message
-    for pattern in RECENCY_PATTERNS:
-        if re.search(pattern, msg_lower):
-            return True, message
-    return False, message
+# ── Pages ─────────────────────────────────────────────────────────────────────
+@app.get("/login")
+def serve_login(): return FileResponse("login.html")
 
-async def tavily_search(query: str) -> str:
-    if not TAVILY_KEY:
-        return "[Search not configured — add TAVILY_KEY to server.py]"
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://api.tavily.com/search",
-                json={"api_key": TAVILY_KEY, "query": query, "search_depth": "basic",
-                    "include_answer": True, "include_raw_content": False, "max_results": 4}
-            )
-            data = resp.json()
-        parts = []
-        if data.get("answer"):
-            parts.append(f"QUICK ANSWER: {data['answer']}")
-        for r in data.get("results", [])[:4]:
-            parts.append(f"• {r.get('title','')} ({r.get('url','')})\n  {r.get('content','')[:300]}")
-        return "\n\n".join(parts) if parts else "No results found."
-    except Exception as e:
-        return f"Search failed: {str(e)}"
-
-
-# ── Morning briefing ──────────────────────────────────────────────────────────
-def get_morning_briefing(profile: dict, mem: dict) -> str | None:
-    today = datetime.now().strftime("%Y-%m-%d")
-    if mem.get("last_briefing_date") == today:
-        return None
-    day_name = datetime.now().strftime("%A")
-    date_str  = datetime.now().strftime("%d %B %Y")
-    lines = [f"MORNING BRIEFING — {day_name}, {date_str}"]
-    if profile.get("goals"):            lines.append(f"Current goals: {profile['goals']}")
-    if profile.get("current_projects"): lines.append(f"Working on: {profile['current_projects']}")
-    return "\n".join(lines)
-
-
-# ── Session helpers ───────────────────────────────────────────────────────────
-def log_session(task: str, start_iso: str, end_iso: str):
-    """Save a completed focus session to the sessions log."""
-    sessions = load_sessions()
-    start_dt  = datetime.fromisoformat(start_iso)
-    end_dt    = datetime.fromisoformat(end_iso)
-    duration  = int((end_dt - start_dt).total_seconds())
-    sessions.append({
-        "task":       task,
-        "date":       start_dt.strftime("%Y-%m-%d"),
-        "start":      start_iso,
-        "end":        end_iso,
-        "duration":   duration,   # seconds
-    })
-    save_sessions(sessions)
-
-
-def compute_stats(sessions: list) -> dict:
-    """Compute daily totals, weekly total, and streak."""
-    if not sessions:
-        return {"today": 0, "week": 0, "streak": 0, "daily": {}}
-
-    today_str = date.today().isoformat()
-
-    # daily totals
-    daily: dict[str, int] = {}
-    for s in sessions:
-        d = s.get("date", "")
-        daily[d] = daily.get(d, 0) + s.get("duration", 0)
-
-    # today
-    today_secs = daily.get(today_str, 0)
-
-    # this week (last 7 days)
-    from datetime import timedelta
-    week_secs = sum(
-        daily.get((date.today() - timedelta(days=i)).isoformat(), 0)
-        for i in range(7)
-    )
-
-    # streak — consecutive days ending today with at least 1 session
-    streak = 0
-    check = date.today()
-    while True:
-        if check.isoformat() in daily:
-            streak += 1
-            check = check - timedelta(days=1)
-        else:
-            break
-
-    return {"today": today_secs, "week": week_secs, "streak": streak, "daily": daily}
-
-
-def fmt_duration(secs: int) -> str:
-    h = secs // 3600
-    m = (secs % 3600) // 60
-    s = secs % 60
-    if h:
-        return f"{h}h {m}m"
-    if m:
-        return f"{m}m {s}s"
-    return f"{s}s"
-
-
-# ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/")
-def serve_ui():
+def serve_index(request: Request):
+    if not get_current_user(request): return RedirectResponse("/login")
     return FileResponse("index.html")
 
+@app.get("/study")
+def serve_study(request: Request):
+    if not get_current_user(request): return RedirectResponse("/login")
+    return FileResponse("study.html")
+
 @app.get("/history")
-def serve_history():
+def serve_history_page(request: Request):
+    if not get_current_user(request): return RedirectResponse("/login")
     return FileResponse("history.html")
 
+# ── API ───────────────────────────────────────────────────────────────────────
 @app.get("/memory")
-def get_memory():
-    return load_memory()
+def get_memory(request: Request):
+    return load_memory(require_user(request)["id"])
 
 @app.get("/profile")
-def get_profile():
-    return load_profile()
+def get_profile(request: Request):
+    user = require_user(request)
+    p = load_profile(user["id"])
+    p["name"] = user["name"]
+    return p
 
 @app.post("/profile")
-def update_profile(req: ProfileRequest):
-    profile = req.model_dump()
-    profile["updated_at"] = datetime.now().isoformat()
-    save_profile(profile)
+def update_profile(req: ProfileRequest, request: Request):
+    save_profile(require_user(request)["id"], req.model_dump())
+    return {"status": "ok"}
+
+@app.post("/groq-key")
+def update_groq_key(req: GroqKeyRequest, request: Request):
+    user = require_user(request)
+    db   = get_db()
+    db.execute("UPDATE users SET groq_key=? WHERE id=?", (req.groq_key, user["id"]))
+    db.commit(); db.close()
     return {"status": "ok"}
 
 @app.get("/onenote/status")
-def onenote_status():
-    return {"connected": False}
+def onenote_status(): return {"connected": False}
 
 @app.post("/focus")
-def set_focus(req: FocusRequest):
-    mem = load_memory()
+def set_focus(req: FocusRequest, request: Request):
+    user = require_user(request)
+    mem  = load_memory(user["id"])
     if req.task:
-        mem["focus_task"]  = req.task
+        mem["focus_task"] = req.task
         mem["focus_start"] = datetime.now().isoformat()
     else:
-        # Session ending — log it
         if mem.get("focus_task") and mem.get("focus_start"):
-            log_session(mem["focus_task"], mem["focus_start"], datetime.now().isoformat())
-        mem["focus_task"]  = None
-        mem["focus_start"] = None
-    save_memory(mem)
+            log_session(user["id"], mem["focus_task"], mem["focus_start"], datetime.now().isoformat())
+        mem["focus_task"] = None; mem["focus_start"] = None
+    save_memory(user["id"], mem)
     return {"status": "ok", "focus_task": mem["focus_task"]}
 
-@app.get("/sessions")
-def get_sessions():
-    sessions  = load_sessions()
-    stats     = compute_stats(sessions)
-    # Return last 50 sessions newest first
-    recent = list(reversed(sessions[-50:]))
-    return {
-        "sessions": recent,
-        "stats":    stats,
-        "fmt": {
-            "today": fmt_duration(stats["today"]),
-            "week":  fmt_duration(stats["week"]),
-            "streak": stats["streak"],
-        }
-    }
-
 @app.post("/chat")
-async def chat(req: ChatRequest):
-    mem     = load_memory()
-    profile = load_profile()
-    context_parts = []
-
-    # Morning briefing
-    briefing = get_morning_briefing(profile, mem)
-    if briefing:
-        mem["last_briefing_date"] = datetime.now().strftime("%Y-%m-%d")
-        save_memory(mem)
-        context_parts.append(briefing)
-
-    if profile:
-        lines = []
-        if profile.get("name"):             lines.append(f"Name: {profile['name']}")
-        if profile.get("goals"):            lines.append(f"Goals: {profile['goals']}")
-        if profile.get("current_projects"): lines.append(f"Working on: {profile['current_projects']}")
-        if profile.get("daily_routine"):    lines.append(f"Routine: {profile['daily_routine']}")
-        if profile.get("about"):            lines.append(f"About: {profile['about']}")
-        if lines: context_parts.append("USER PROFILE:\n" + "\n".join(lines))
-
+async def chat(req: ChatRequest, request: Request):
+    user    = require_user(request)
+    mem     = load_memory(user["id"])
+    profile = load_profile(user["id"])
+    gcl     = get_groq(user)
+    ctx     = []
+    lines   = []
+    if user.get("name"):                 lines.append(f"Name: {user['name']}")
+    if profile.get("goals"):             lines.append(f"Goals: {profile['goals']}")
+    if profile.get("current_projects"):  lines.append(f"Working on: {profile['current_projects']}")
+    if profile.get("about"):             lines.append(f"About: {profile['about']}")
+    if lines: ctx.append("USER PROFILE:\n" + "\n".join(lines))
     if mem["focus_task"]:
-        started = mem["focus_start"][:16].replace("T", " ") if mem["focus_start"] else "unknown"
-        context_parts.append(f"ACTIVE FOCUS SESSION: '{mem['focus_task']}' (started {started})")
-
-    if mem["notes"]:
-        context_parts.append(f"USER QUICK NOTES: {'; '.join(mem['notes'][-5:])}")
-
-    searching = False
-    should_search, query = needs_search(req.message)
-    if should_search:
-        searching = True
-        search_results = await tavily_search(query)
-        context_parts.append(f"WEB SEARCH RESULTS for '{query}':\n{search_results}")
-
-    user_content = req.message
-    if context_parts:
-        user_content += f"\n\n[CONTEXT:\n" + "\n---\n".join(context_parts) + "\n]"
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for h in req.history[-12:]:
-        messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": user_content})
-
+        started = mem["focus_start"][:16].replace("T"," ") if mem["focus_start"] else "unknown"
+        ctx.append(f"ACTIVE FOCUS: '{mem['focus_task']}' since {started}")
+    if mem["notes"]: ctx.append(f"NOTES: {'; '.join(mem['notes'][-5:])}")
+    searching, query = False, req.message
+    should, q = needs_search(req.message)
+    if should:
+        searching = True; query = q
+        ctx.append(f"WEB SEARCH '{q}':\n{await tavily_search(q)}")
+    uc = req.message + ("\n\n[CONTEXT:\n" + "\n---\n".join(ctx) + "\n]" if ctx else "")
+    msgs = [{"role":"system","content":SYSTEM_PROMPT}]
+    for h in req.history[-12:]: msgs.append({"role":h["role"],"content":h["content"]})
+    msgs.append({"role":"user","content":uc})
     try:
-        resp = CLIENT.chat.completions.create(
-            model=MODEL, messages=messages, temperature=0.85, max_tokens=500
-        )
+        resp  = gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
         reply = resp.choices[0].message.content
-        mem["history"].append({"role": "user",      "content": req.message, "ts": datetime.now().isoformat()})
-        mem["history"].append({"role": "assistant", "content": reply,       "ts": datetime.now().isoformat()})
+        mem["history"].append({"role":"user","content":req.message,"ts":datetime.now().isoformat()})
+        mem["history"].append({"role":"assistant","content":reply,"ts":datetime.now().isoformat()})
         mem["history"] = mem["history"][-40:]
-        save_memory(mem)
-        return {"reply": reply, "focus_task": mem["focus_task"], "searched": searching, "query": query if searching else None}
+        save_memory(user["id"], mem)
+        return {"reply":reply,"focus_task":mem["focus_task"],"searched":searching,"query":query if searching else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/note")
-def add_note(payload: dict):
-    mem = load_memory()
-    note = payload.get("note", "").strip()
+def add_note(payload: dict, request: Request):
+    user = require_user(request)
+    mem  = load_memory(user["id"])
+    note = payload.get("note","").strip()
     if note:
         mem["notes"].append(f"[{datetime.now().strftime('%b %d')}] {note}")
         mem["notes"] = mem["notes"][-20:]
-        save_memory(mem)
+        save_memory(user["id"], mem)
     return {"status": "ok"}
 
 @app.post("/update-notes")
-def update_notes(payload: dict):
-    mem = load_memory()
-    mem["notes"] = payload.get("notes", [])
-    save_memory(mem)
+def update_notes(payload: dict, request: Request):
+    user = require_user(request)
+    mem  = load_memory(user["id"])
+    mem["notes"] = payload.get("notes",[])
+    save_memory(user["id"], mem)
     return {"status": "ok"}
 
-@app.post("/update-profile")
-def update_profile(payload: dict):
-    profile = load_profile()
-    profile.update(payload)
-    save_profile(profile)
-    return {"status": "ok"}
-
-@app.post("/update-memory")
-def update_memory(payload: dict):
-    mem = load_memory()
-    mem.update(payload)
-    save_memory(mem)
-    return {"status": "ok"}
+@app.get("/sessions")
+def get_sessions(request: Request):
+    user = require_user(request)
+    db   = get_db()
+    rows = db.execute("SELECT * FROM focus_sessions WHERE user_id=? ORDER BY start DESC LIMIT 50", (user["id"],)).fetchall()
+    db.close()
+    stats = compute_stats(user["id"])
+    return {"sessions":[dict(r) for r in rows],"stats":stats,
+            "fmt":{"today":fmt_dur(stats["today"]),"week":fmt_dur(stats["week"]),"streak":stats["streak"]}}
 
 @app.post("/study/chat")
-async def study_chat(req: StudyChatRequest):
-    subject_ctx = f"Current subject: {req.subject}" if req.subject else "No subject set — answer generally for CSE."
-
-    messages = [{"role": "system", "content": STUDY_TUTOR_PROMPT + f"\n\n{subject_ctx}"}]
-    for h in req.history[-10:]:
-        messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": req.message})
-
+async def study_chat(req: StudyChatRequest, request: Request):
+    user = require_user(request)
+    gcl  = get_groq(user)
+    subj = f"Subject: {req.subject}." if req.subject else "General CSE."
+    msgs = [{"role":"system","content":STUDY_TUTOR+f"\n\n{subj}"}]
+    for h in req.history[-10:]: msgs.append({"role":h["role"],"content":h["content"]})
+    msgs.append({"role":"user","content":req.message})
     try:
-        resp = CLIENT.chat.completions.create(
-            model=MODEL, messages=messages, temperature=0.5, max_tokens=700
-        )
-        return {"reply": resp.choices[0].message.content}
+        return {"reply": gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.5,max_tokens=700).choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/study/quiz")
-async def generate_quiz(req: QuizRequest):
-    subject_hint = f"Subject: {req.subject}. " if req.subject else ""
-    prompt = f"{subject_hint}Generate 5 quiz questions from this text:\n\n{req.notes[:3000]}"
-
-    messages = [
-        {"role": "system", "content": STUDY_QUIZ_PROMPT},
-        {"role": "user",   "content": prompt}
-    ]
+async def generate_quiz(req: QuizRequest, request: Request):
+    user  = require_user(request)
+    gcl   = get_groq(user)
+    msgs  = [{"role":"system","content":STUDY_QUIZ},
+             {"role":"user","content":f"{'Subject: '+req.subject+'. ' if req.subject else ''}Generate 5 questions from:\n\n{req.notes[:3000]}"}]
     try:
-        resp = CLIENT.chat.completions.create(
-            model=MODEL, messages=messages, temperature=0.4, max_tokens=800
-        )
-        raw = resp.choices[0].message.content
-        # strip markdown fences if present
-        clean = raw.replace("```json","").replace("```","").strip()
-        data  = json.loads(clean)
+        raw  = gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.4,max_tokens=800).choices[0].message.content
+        data = json.loads(raw.replace("```json","").replace("```","").strip())
         return {"questions": data["questions"]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Quiz generation failed: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Quiz failed: {e}")
 
 @app.post("/study/check")
-async def check_answer(req: CheckRequest):
-    prompt = f"Question: {req.question}\nCorrect answer: {req.correct_answer}\nStudent's answer: {req.user_answer}"
-
-    messages = [
-        {"role": "system", "content": STUDY_CHECK_PROMPT},
-        {"role": "user",   "content": prompt}
-    ]
+async def check_answer(req: CheckRequest, request: Request):
+    user = require_user(request)
+    gcl  = get_groq(user)
+    msgs = [{"role":"system","content":STUDY_CHECK},
+            {"role":"user","content":f"Q: {req.question}\nCorrect: {req.correct_answer}\nStudent: {req.user_answer}"}]
     try:
-        resp = CLIENT.chat.completions.create(
-            model=MODEL, messages=messages, temperature=0.3, max_tokens=200
-        )
-        raw   = resp.choices[0].message.content
-        clean = raw.replace("```json","").replace("```","").strip()
-        data  = json.loads(clean)
-        return {"correct": data["correct"], "feedback": data["feedback"]}
+        raw  = gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.3,max_tokens=200).choices[0].message.content
+        data = json.loads(raw.replace("```json","").replace("```","").strip())
+        return {"correct":data["correct"],"feedback":data["feedback"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/study")
-def serve_study():
-    return FileResponse("study.html")
-
-
 if __name__ == "__main__":
-    print("\n  CHOTU is online.")
-    print("  Chat  → http://localhost:8000")
-    print("  Stats → http://localhost:8000/history\n")
-    print("  Study → http://localhost:8000/study\n")
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT",8000)))

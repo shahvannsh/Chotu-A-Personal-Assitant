@@ -1,32 +1,8 @@
 {
   "focus_task": null,
   "focus_start": null,
-  "notes": [
-    "[Apr 07] waterfall model is a linear approach to software development, yaar. it's like a flow, one phase completes, then the next",
-    "[Apr 07] * each leaf node represents a data block * each internal node is a hash of its child nodes * the root node is a hash of",
-    "[Apr 25] hi i am vannsh shah"
-  ],
+  "notes": [],
   "history": [
-    {
-      "role": "user",
-      "content": "i am bored",
-      "ts": "2026-04-07T11:16:30.194151"
-    },
-    {
-      "role": "assistant",
-      "content": "arre vannsh, focus session is on, bhai. you can't just say \"i am bored\" and expect me to entertain you. you've got a goal to crack CSE, and chotu's development isn't gonna happen on its own. what's the next task you need to finish for chotu? let's get that done, kar le bhai!",
-      "ts": "2026-04-07T11:16:30.194268"
-    },
-    {
-      "role": "user",
-      "content": "give me some motivation bruh",
-      "ts": "2026-04-07T11:16:54.584872"
-    },
-    {
-      "role": "assistant",
-      "content": "vannsh, let me tell you something, bhai. you're 20, pursuing CSE, and you've already set a goal to make it big in the next 3 years. that's amazing, bro! you're not just studying, you're building chotu, your own ai - that's some next-level stuff. and you're not just a bookworm, you're out there playing sports, hitting the gym... you're living your best life, yaar! \n\nnow, i know it's tough to stay motivated all the time, but think about why you started all this in the first place. you wanted to make a name for yourself in CSE, and you're already on the right path. chotu's gonna be a game-changer, and you're the one making it happen. so, don't give up now, kar le bhai! you've got this!",
-      "ts": "2026-04-07T11:16:54.584891"
-    },
     {
       "role": "user",
       "content": "okay",
@@ -206,7 +182,27 @@
       "role": "assistant",
       "content": "kya scene hai, vannsh bhai? what's up? just got back from badminton class, and gym, i hope? or are you taking a chill day, enjoying life, and not being too serious about studies for a change? by the way, how's chotu coming along? still working on that ai project, or have you taken a break from it? and, sun yaar, what's on your mind? want to talk about something specific, or just shoot the breeze?",
       "ts": "2026-04-13T21:53:18.934400"
+    },
+    {
+      "role": "user",
+      "content": "hi tell me something interesting",
+      "ts": "2026-04-25T19:00:45.126226"
+    },
+    {
+      "role": "assistant",
+      "content": "hey vannsh, saturday ho toh chill karne ka din hai, lekin tujhe pata hai na, chotu ko banane mein kitna mehnat lag rahi hai? what are you working on today, bhai?",
+      "ts": "2026-04-25T19:00:45.126237"
+    },
+    {
+      "role": "user",
+      "content": "describe yourself",
+      "ts": "2026-04-29T22:27:04.358524"
+    },
+    {
+      "role": "assistant",
+      "content": "hey vannsh, wednesday hai, aur tu apne cse career ko boost karne ke liye chotu banane par focus kar raha hai, batao na, today kya plan hai?",
+      "ts": "2026-04-29T22:27:04.358636"
     }
   ],
-  "last_briefing_date": "2026-04-13"
+  "last_briefing_date": "2026-04-29"
 }

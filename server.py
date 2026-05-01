@@ -527,6 +527,14 @@ async def generate_quiz(req: QuizRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Quiz failed: {e}")
 
+@app.get("/admin/clear-sessions")
+def clear_sessions():
+    db = get_db()
+    db.execute("DELETE FROM sessions_tok")
+    db.commit()
+    db.close()
+    return {"status": "all sessions cleared"}
+
 @app.post("/study/check")
 async def check_answer(req: CheckRequest, request: Request):
     user = require_user(request)

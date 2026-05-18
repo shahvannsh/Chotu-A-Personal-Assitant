@@ -4,3 +4,8 @@
 __pycache__/
 *.pyc
 chotu.db
+chotu_memory.json
+chotu_profile.json
+chotu_sessions.json
+ms_token.json
+*.json

@@ -25,7 +25,10 @@ REDIRECT_URI         = "https://chotu-a-personal-assitant-production.up.railway.
 MODEL                = "llama-3.3-70b-versatile"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DB_PATH = Path(os.getenv("DB_PATH", "/app/chotu.db"))
+# Local default: next to this file. Production: set DB_PATH (e.g. /app/chotu.db on Railway).
+_db_default = Path(__file__).resolve().parent / "chotu.db"
+DB_PATH = Path(os.getenv("DB_PATH", str(_db_default)))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))

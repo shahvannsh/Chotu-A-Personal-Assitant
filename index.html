@@ -719,8 +719,16 @@ init();
 }
 [data-theme="spidey"] .mp-vol-slider::-webkit-slider-thumb { background: #E01020; }
 
-/* youtube embed (hidden iframe) */
-.mp-yt-frame { display: none; width: 0; height: 0; position: absolute; }
+/* YouTube embed (must be visible + sized for playback) */
+.mp-yt-wrap { display: none; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-hi); }
+.mp-yt-wrap.visible { display: block; }
+#mpYtHost { width: 100%; min-height: 120px; aspect-ratio: 16 / 9; }
+#mpYtHost iframe { width: 100%; height: 100%; border: 0; display: block; }
+.mp-yt-open {
+  display: block; margin-top: 6px; font-family: var(--mono); font-size: 9px;
+  color: var(--text-dim); text-align: center; letter-spacing: 1px; text-decoration: none;
+}
+.mp-yt-open:hover { color: var(--accent); }
 
 /* wave visualiser for generated audio */
 .mp-wave { display: none; justify-content: center; align-items: center; gap: 2px; height: 20px; }
@@ -758,6 +766,11 @@ init();
       <button class="mp-mood-btn"        id="moodLight"    onclick="setMood('light')">   <span class="mood-icon">📖</span>LIGHT<br>READ</button>
       <button class="mp-mood-btn"        id="moodCreative" onclick="setMood('creative')"><span class="mood-icon">✨</span>CREA-<br>TIVE</button>
     </div>
+    <!-- YouTube player (visible when YOUTUBE source selected) -->
+    <div class="mp-yt-wrap" id="mpYtWrap">
+      <div id="mpYtHost"></div>
+      <a class="mp-yt-open" id="mpYtOpen" href="#" target="_blank" rel="noopener">open in youtube ↗</a>
+    </div>
     <!-- wave vis -->
     <div class="mp-wave" id="mpWave"><span></span><span></span><span></span><span></span><span></span></div>
     <!-- now playing -->
@@ -773,9 +786,6 @@ init();
   </div>
 </div>
 
-<!-- hidden YouTube iframe -->
-<iframe class="mp-yt-frame" id="mpYtFrame" allow="autoplay" allowfullscreen></iframe>
-
 <!-- ── Player JS ──────────────────────────────────────────────── -->
 <script>
 // ── Music Player State ────────────────────────────────────────────────────────
@@ -789,6 +799,10 @@ const MP = {
   gainNode:  null,
   oscillators: [],
   minimised: false,
+  ytPlayer:  null,
+  ytReady:   false,
+  ytKey:     null,
+  ytApiPromise: null,
 };
 
 // Binaural beat frequencies per mood
@@ -799,12 +813,64 @@ const BINAURAL = {
   creative: { carrier: 200, beat: 6,   label: 'Creative — 6Hz Theta',       desc: 'Creative flow state' },
 };
 
-// YouTube playlist IDs per mood
+// YouTube per mood: playlist + embeddable fallback video (lofi stream / long mixes)
 const YT_PLAYLISTS = {
-  deep:     { id: 'PLofDKFTBaP0YBYQQ67GsJcwDFJl38rFHy', label: 'Hans Zimmer — Cinematic Focus' },
-  light:    { id: 'PLgzTt0k8mXzEk586ze4BjKoWWqxFCPuXi', label: 'Lo-fi Study Beats' },
-  creative: { id: 'PLMIbmfP_9vb8BCxRoraJpfyIkAMua0Whe', label: 'Ambient Creativity Mix' },
+  deep:     { playlist: 'PLofDKFTBaP0YBYQQ67GsJcwDFJl38rFHy', video: 'DWcJFNALawM', label: 'Deep Focus — Cinematic' },
+  light:    { playlist: 'PLgzTt0k8mXzEk586ze4BjKoWWqxFCPuXi', video: 'jfKfPfyJRdk', label: 'Lo-fi Study Radio' },
+  creative: { playlist: 'PLMIbmfP_9vb8BCxRoraJpfyIkAMua0Whe', video: 'lTRiu6WVfjI', label: 'Ambient Creativity' },
 };
+
+function updateYtOpenLink() {
+  const pl = YT_PLAYLISTS[MP.mood];
+  const a = document.getElementById('mpYtOpen');
+  if (!a || !pl) return;
+  a.href = pl.playlist
+    ? `https://www.youtube.com/playlist?list=${pl.playlist}`
+    : `https://www.youtube.com/watch?v=${pl.video}`;
+}
+
+function syncYoutubeUi() {
+  const ytOn = MP.source === 'youtube';
+  document.getElementById('mpYtWrap')?.classList.toggle('visible', ytOn);
+  updateYtOpenLink();
+}
+
+function loadYouTubeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (MP.ytApiPromise) return MP.ytApiPromise;
+  MP.ytApiPromise = new Promise(resolve => {
+    const done = () => resolve();
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); done(); };
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(s);
+    } else if (window.YT && window.YT.Player) {
+      done();
+    }
+  });
+  return MP.ytApiPromise;
+}
+
+function destroyYtPlayer() {
+  if (MP.ytPlayer) {
+    try { MP.ytPlayer.destroy(); } catch (e) {}
+    MP.ytPlayer = null;
+    MP.ytReady = false;
+    MP.ytKey = null;
+  }
+  const host = document.getElementById('mpYtHost');
+  if (host) host.innerHTML = '';
+}
+
+function applyYtVolume() {
+  if (!MP.ytPlayer || !MP.ytReady) return;
+  try {
+    if (MP.muted || MP.volume === 0) MP.ytPlayer.mute();
+    else { MP.ytPlayer.unMute(); MP.ytPlayer.setVolume(MP.volume); }
+  } catch (e) {}
+}
 
 // ── Init player ───────────────────────────────────────────────────────────────
 function initMusicPlayer() {
@@ -816,6 +882,7 @@ function initMusicPlayer() {
     document.getElementById('mpVolSlider').value = MP.volume;
     setSource(MP.source, false);
     setMood(MP.mood, false);
+    syncYoutubeUi();
     updatePlayBtn();
     el.classList.remove('minimised');
     MP.minimised = false;
@@ -858,6 +925,7 @@ function setSource(src, autoplay = true) {
   localStorage.setItem('mp-source', src);
   document.getElementById('srcGenBtn').classList.toggle('active', src === 'generated');
   document.getElementById('srcYtBtn').classList.toggle('active',  src === 'youtube');
+  syncYoutubeUi();
   updateNowPlaying();
   if (autoplay && focusTask) startMusic();
 }
@@ -870,6 +938,7 @@ function setMood(mood, autoplay = true) {
   document.getElementById('moodDeep').classList.toggle('active',     mood === 'deep');
   document.getElementById('moodLight').classList.toggle('active',    mood === 'light');
   document.getElementById('moodCreative').classList.toggle('active', mood === 'creative');
+  updateYtOpenLink();
   updateNowPlaying();
   if (autoplay && focusTask) startMusic();
 }
@@ -879,11 +948,11 @@ function toggleMusic() {
   MP.playing ? stopMusic() : startMusic();
 }
 
-function startMusic() {
+async function startMusic() {
   if (MP.source === 'generated') {
     startBinaural();
   } else {
-    startYoutube();
+    await startYoutube();
   }
   MP.playing = true;
   updatePlayBtn();
@@ -955,19 +1024,109 @@ function stopBinaural() {
   }
 }
 
-// ── YouTube engine ────────────────────────────────────────────────────────────
-function startYoutube() {
-  const pl   = YT_PLAYLISTS[MP.mood];
-  const frame = document.getElementById('mpYtFrame');
-  // autoplay=1, loop=1, shuffle via index
-  frame.src = `https://www.youtube.com/embed/videoseries?list=${pl.id}&autoplay=1&loop=1&controls=0&enablejsapi=1`;
-  frame.style.display = 'block';
+// ── YouTube engine (IFrame API — requires visible player + user play click) ───
+async function startYoutube() {
+  const pl = YT_PLAYLISTS[MP.mood];
+  if (!pl) return;
+  syncYoutubeUi();
+  const key = `${MP.mood}:${pl.playlist || pl.video}`;
+  const labelEl = document.getElementById('mpNowPlaying');
+  if (labelEl) labelEl.textContent = 'loading youtube…';
+
+  try {
+    await loadYouTubeApi();
+  } catch (e) {
+    console.error('YouTube API load failed', e);
+    if (labelEl) labelEl.textContent = 'YouTube failed — use GENERATED or open link below';
+    return;
+  }
+
+  if (MP.ytPlayer && MP.ytReady && MP.ytKey === key) {
+    applyYtVolume();
+    MP.ytPlayer.playVideo();
+    return;
+  }
+
+  destroyYtPlayer();
+  MP.ytKey = key;
+
+  const hostId = 'mpYtHost';
+  const playerVars = {
+    autoplay: 1,
+    controls: 1,
+    modestbranding: 1,
+    rel: 0,
+    playsinline: 1,
+    origin: window.location.origin,
+  };
+  if (pl.playlist) {
+    playerVars.listType = 'playlist';
+    playerVars.list = pl.playlist;
+  } else {
+    playerVars.loop = 1;
+    playerVars.playlist = pl.video;
+  }
+
+  return new Promise(resolve => {
+    MP.ytPlayer = new YT.Player(hostId, {
+      height: '140',
+      width: '100%',
+      videoId: pl.playlist ? undefined : pl.video,
+      playerVars,
+      events: {
+        onReady: (ev) => {
+          MP.ytReady = true;
+          applyYtVolume();
+          ev.target.playVideo();
+          updateNowPlaying();
+          resolve();
+        },
+        onError: () => {
+          if (pl.playlist && pl.video) {
+            destroyYtPlayer();
+            MP.ytKey = `${MP.mood}:v:${pl.video}`;
+            MP.ytPlayer = new YT.Player(hostId, {
+              height: '140',
+              width: '100%',
+              videoId: pl.video,
+              playerVars: {
+                autoplay: 1,
+                controls: 1,
+                loop: 1,
+                playlist: pl.video,
+                modestbranding: 1,
+                rel: 0,
+                playsinline: 1,
+                origin: window.location.origin,
+              },
+              events: {
+                onReady: (ev) => {
+                  MP.ytReady = true;
+                  applyYtVolume();
+                  ev.target.playVideo();
+                  updateNowPlaying();
+                  resolve();
+                },
+                onError: () => {
+                  if (labelEl) labelEl.textContent = 'embed blocked — tap “open in youtube”';
+                  resolve();
+                },
+              },
+            });
+          } else {
+            if (labelEl) labelEl.textContent = 'embed blocked — tap “open in youtube”';
+            resolve();
+          }
+        },
+      },
+    });
+  });
 }
 
 function stopYoutube() {
-  const frame = document.getElementById('mpYtFrame');
-  frame.src   = '';
-  frame.style.display = 'none';
+  if (MP.ytPlayer && MP.ytReady) {
+    try { MP.ytPlayer.pauseVideo(); } catch (e) {}
+  }
 }
 
 // ── Volume ────────────────────────────────────────────────────────────────────
@@ -975,17 +1134,14 @@ function setVolume(val) {
   MP.volume = parseInt(val);
   localStorage.setItem('mp-volume', MP.volume);
   if (MP.gainNode) MP.gainNode.gain.value = MP.muted ? 0 : MP.volume / 100;
-  // YouTube volume via postMessage
-  const frame = document.getElementById('mpYtFrame');
-  if (MP.source === 'youtube' && MP.playing) {
-    try { frame.contentWindow.postMessage(JSON.stringify({event:'command',func:'setVolume',args:[MP.volume]}), '*'); } catch(e) {}
-  }
+  if (MP.source === 'youtube') applyYtVolume();
   document.getElementById('mpVolIcon') && (document.getElementById('mpVolIcon').textContent = MP.volume === 0 ? '🔇' : '🔊');
 }
 
 function toggleMute() {
   MP.muted = !MP.muted;
   if (MP.gainNode) MP.gainNode.gain.value = MP.muted ? 0 : MP.volume / 100;
+  if (MP.source === 'youtube') applyYtVolume();
   document.querySelector('.mp-vol-icon').textContent = MP.muted ? '🔇' : '🔊';
 }
 

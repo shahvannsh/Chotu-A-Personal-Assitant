@@ -166,6 +166,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .note-input:focus{border-color:var(--accent);}
 .note-add-btn{font-family:var(--btn-font);font-size:16px;background:transparent;border:2px solid var(--border-hi);border-radius:4px;color:var(--accent);cursor:pointer;padding:0 10px;transition:all .15s;}
 .note-add-btn:hover{background:var(--focus-btn-bg);border-color:var(--accent);}
+.mp-sidebar-hint{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:8px;line-height:1.45;}
 
 /* main */
 .main{display:flex;flex-direction:column;background:transparent;overflow:hidden;}
@@ -347,6 +348,11 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
       </div>
     </div>
     <div>
+      <div class="section-label">🎵 FOCUS MUSIC</div>
+      <button type="button" class="btn btn-ghost" style="width:100%" onclick="showMusicPlayer()">OPEN MUSIC PLAYER</button>
+      <p class="mp-sidebar-hint">Floating panel — bottom-right. Binaural or YouTube; auto-plays when a focus session starts.</p>
+    </div>
+    <div>
       <div class="section-label">👤 PROFILE</div>
       <div class="profile-mini" id="profileMini">
         <div class="profile-name" id="profileMiniName">Loading...</div>
@@ -494,7 +500,8 @@ function toggleUserMenu(){document.getElementById('userMenuWrap').classList.togg
 function closeUserMenu(){document.getElementById('userMenuWrap').classList.remove('open');}
 
 // ── State ──────────────────────────────────────────────────────────────────
-let chatHistory=[],focusTask=null,focusStart=null,timerInterval=null;
+let chatHistory=[],focusStart=null,timerInterval=null;
+var focusTask=null;
 let recognition=null,isListening=false,finalTranscript='',lastResultIndex=0;
 let ttsEnabled=false,currentUtterance=null;
 const IDLE_TIMEOUT=5*60*1000,IDLE_WARN_AT=4*60*1000;
@@ -602,16 +609,26 @@ init();
 /* floating player */
 .music-player {
   position: fixed;
-  bottom: 90px;
-  right: 24px;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
   width: 280px;
+  max-width: calc(100vw - 32px);
   background: var(--surface);
   border: 1px solid var(--border-hi);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,200,255,0.08);
-  z-index: 200;
+  z-index: 10050;
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
   user-select: none;
   transition: box-shadow .2s;
+}
+.music-player.mp-highlight {
+  box-shadow: 0 0 0 3px var(--accent), 0 8px 32px rgba(0,0,0,0.55);
+}
+[data-theme="spidey"] .music-player.mp-highlight {
+  box-shadow: 0 0 0 3px #E01020, 0 8px 32px rgba(0,0,0,0.55);
 }
 .music-player:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,200,255,0.18); }
 .music-player.minimised { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; }
@@ -693,11 +710,11 @@ init();
 .mp-vol-wrap { flex: 1; display: flex; align-items: center; gap: 6px; }
 .mp-vol-icon { font-size: 12px; color: var(--text-dim); flex-shrink: 0; cursor: pointer; }
 .mp-vol-slider {
-  flex: 1; -webkit-appearance: none; height: 3px;
+  flex: 1; -webkit-appearance: none; appearance: none; height: 3px;
   border-radius: 2px; background: var(--border-hi); outline: none; cursor: pointer;
 }
 .mp-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 12px;
+  -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
   border-radius: 50%; background: var(--accent); cursor: pointer;
 }
 [data-theme="spidey"] .mp-vol-slider::-webkit-slider-thumb { background: #E01020; }
@@ -744,12 +761,12 @@ init();
     <!-- wave vis -->
     <div class="mp-wave" id="mpWave"><span></span><span></span><span></span><span></span><span></span></div>
     <!-- now playing -->
-    <div class="mp-now-playing" id="mpNowPlaying">select mood to start</div>
+    <div class="mp-now-playing" id="mpNowPlaying">click ▶ to play · auto on focus</div>
     <!-- controls -->
     <div class="mp-controls">
       <button class="mp-play-btn" id="mpPlayBtn" onclick="toggleMusic()">▶</button>
       <div class="mp-vol-wrap">
-        <span class="mp-vol-icon" onclick="toggleMute()">🔊</span>
+        <span class="mp-vol-icon" id="mpVolIcon" onclick="toggleMute()">🔊</span>
         <input class="mp-vol-slider" id="mpVolSlider" type="range" min="0" max="100" value="60" oninput="setVolume(this.value)"/>
       </div>
     </div>
@@ -791,24 +808,48 @@ const YT_PLAYLISTS = {
 
 // ── Init player ───────────────────────────────────────────────────────────────
 function initMusicPlayer() {
-  // restore state
-  document.getElementById('mpVolSlider').value = MP.volume;
-  setSource(MP.source, false);
-  setMood(MP.mood, false);
-  updatePlayBtn();
+  const el = document.getElementById('musicPlayer');
+  if (!el) return;
+  try {
+    if (!BINAURAL[MP.mood]) MP.mood = 'deep';
+    if (MP.source !== 'generated' && MP.source !== 'youtube') MP.source = 'generated';
+    document.getElementById('mpVolSlider').value = MP.volume;
+    setSource(MP.source, false);
+    setMood(MP.mood, false);
+    updatePlayBtn();
+    el.classList.remove('minimised');
+    MP.minimised = false;
+    document.getElementById('mpMinBtn').textContent = '−';
+  } catch (e) {
+    console.error('Music player init failed', e);
+    return;
+  }
 
-  // minimise toggle
   document.getElementById('mpMinBtn').addEventListener('click', e => {
     e.stopPropagation();
     toggleMinimise();
   });
-  document.getElementById('musicPlayer').addEventListener('click', e => {
+  el.addEventListener('click', e => {
     if (MP.minimised) toggleMinimise();
   });
-
-  // drag
-  makeDraggable(document.getElementById('musicPlayer'), document.getElementById('mpHeader'));
+  makeDraggable(el, document.getElementById('mpHeader'));
 }
+
+function showMusicPlayer() {
+  const el = document.getElementById('musicPlayer');
+  if (!el) return;
+  if (MP.minimised) toggleMinimise();
+  el.style.right = 'auto';
+  el.style.bottom = 'auto';
+  const pad = 16;
+  const w = el.offsetWidth || 280;
+  const h = el.offsetHeight || 300;
+  el.style.left = Math.max(pad, (window.innerWidth - w) / 2) + 'px';
+  el.style.top = Math.max(pad, (window.innerHeight - h) / 2) + 'px';
+  el.classList.add('mp-highlight');
+  setTimeout(() => el.classList.remove('mp-highlight'), 2500);
+}
+window.showMusicPlayer = showMusicPlayer;
 
 // ── Source ────────────────────────────────────────────────────────────────────
 function setSource(src, autoplay = true) {
@@ -956,7 +997,7 @@ function updatePlayBtn() {
 function updateNowPlaying() {
   const el = document.getElementById('mpNowPlaying');
   if (!MP.playing) {
-    el.textContent = focusTask ? 'paused — click ▶ to start' : 'starts with focus session';
+    el.textContent = focusTask ? 'paused — click ▶ to start' : 'click ▶ to play anytime';
     el.classList.remove('active');
     return;
   }
@@ -1068,11 +1109,13 @@ setInterval(() => {
   }
 }, 1000);
 
-// Init on load
+function bootMusicPlayer() {
+  requestAnimationFrame(() => initMusicPlayer());
+}
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initMusicPlayer);
+  document.addEventListener('DOMContentLoaded', bootMusicPlayer);
 } else {
-  initMusicPlayer();
+  bootMusicPlayer();
 }
 </script>
 

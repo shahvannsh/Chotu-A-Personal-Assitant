@@ -21,7 +21,7 @@ TAVILY_KEY           = os.getenv("TAVILY_KEY", "")
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 SECRET_KEY           = os.getenv("SECRET_KEY", secrets.token_hex(32))
-REDIRECT_URI         = "https://chotu-a-personal-assitant-production.up.railway.app/auth/callback"
+REDIRECT_URI = "https://chotu-lcc7.onrender.com/auth/callback"
 MODEL                = "llama-3.3-70b-versatile"
 
 # ── Database ──────────────────────────────────────────────────────────────────

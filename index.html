@@ -753,7 +753,7 @@ const THEMES={
 };
 function setTheme(t){if(!THEMES[t])t="default";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("chotu-theme",t);const th=THEMES[t];document.getElementById("themeLabel").textContent=th.label;document.getElementById("logoSub").textContent=th.logoSub;document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===t));closeThemeGallery();}
 function openThemeGallery(){const saved=localStorage.getItem("chotu-theme")||"default";document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));document.getElementById("themeGallery").classList.add("open");}
-function closeThemeGallery(){document.getElementById("themeGallery").classList.remove("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
+function closeThemeGallery(){const el=document.getElementById("themeGallery");if(el)el.classList.remove("open");}function openThemeGallery(){const el=document.getElementById("themeGallery");if(!el)return;const saved=localStorage.getItem("chotu-theme")||"default";el.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));el.classList.add("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
 document.addEventListener('click',e=>{if(!document.getElementById('themeDropdown').contains(e.target))closeThemeMenu();});
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1532,7 +1532,7 @@ if (document.readyState === 'loading') {
 
 <script>
 // ── Extended quotes per theme ────────────────────────────────────────────────
-const THEME_QUOTES = {
+window.THEME_QUOTES = {
   default:  [
     {text:"I am Iron Man.",attr:"— Tony Stark"},
     {text:"Part of the journey is the end.",attr:"— Tony Stark"},
@@ -1594,14 +1594,15 @@ const THEME_QUOTES = {
 // Override getQuote to use theme-specific quotes
 function getQuote(){
   const t = document.documentElement.getAttribute('data-theme') || 'default';
-  const arr = THEME_QUOTES[t] || THEME_QUOTES['default'];
+  const quotes = window.THEME_QUOTES || {};
+  const arr = quotes[t] || quotes['default'] || [{text:"Stay focused.",attr:"— Chotu"}];
   return arr[Math.floor(Math.random()*arr.length)];
 }
 
 // ── YouTube fix — use nocookie + proper params ────────────────────────────────
 // Override YT_PLAYLISTS with fixed URLs
-if(typeof YT_PLAYLISTS !== 'undefined'){
-  // patch startYoutube to use a working embed approach
+// YouTube fix - runs after everything loaded
+window.addEventListener('load', function(){
   window.startYoutube = function(){
     const PLAYLISTS = {
       deep:     'PLofDKFTBaP0YBYQQ67GsJcwDFJl38rFHy',
@@ -1628,21 +1629,20 @@ if(typeof YT_PLAYLISTS !== 'undefined'){
     frame.src = '';
     frame.style.display = 'none';
   };
-}
+});
 
 // close gallery on escape
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape') closeThemeGallery();
 });
 
-// mark active card on load
-(function(){
+// mark active card on load - wait for DOM
+document.addEventListener('DOMContentLoaded', function(){
   const saved = localStorage.getItem('chotu-theme') || 'default';
   document.querySelectorAll('.tg-card').forEach(c => c.classList.toggle('active', c.dataset.theme === saved));
-  // set active card border color
-  const th = THEMES[saved];
+  const th = window.THEMES ? THEMES[saved] : null;
   if(th) document.querySelectorAll('.tg-card[data-theme="'+saved+'"]').forEach(c => c.style.borderColor = th.color);
-})();
+});
 </script>
 
 </body>

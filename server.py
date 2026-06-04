@@ -8,12 +8,10 @@ from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Optional
 import uvicorn
+import math
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-APP_NAME = "Chotu - Personal AI Assistant"
-SESSIONS_FILE = Path("sessions.json")
-MEMORY_FILE   = Path("memory.json")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 GROQ_API_KEY         = os.getenv("GROQ_API_KEY", "")
@@ -21,14 +19,11 @@ TAVILY_KEY           = os.getenv("TAVILY_KEY", "")
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 SECRET_KEY           = os.getenv("SECRET_KEY", secrets.token_hex(32))
-REDIRECT_URI = "https://chotu-lcc7.onrender.com/auth/callback"
+REDIRECT_URI         = os.getenv("REDIRECT_URI", "https://chotu-lcc7.onrender.com/auth/callback")
 MODEL                = "llama-3.3-70b-versatile"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# Local default: next to this file. Production: set DB_PATH (e.g. /app/chotu.db on Railway).
-_db_default = Path(__file__).resolve().parent / "chotu.db"
-DB_PATH = Path(os.getenv("DB_PATH", str(_db_default)))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path("/app/chotu.db") if os.path.exists("/app") else Path("chotu_mvp.db")
 
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))
@@ -78,6 +73,59 @@ def init_db():
             end      TEXT NOT NULL,
             duration INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS streaks (
+            user_id          INTEGER PRIMARY KEY,
+            current_streak   INTEGER DEFAULT 0,
+            longest_streak   INTEGER DEFAULT 0,
+            last_study_date  TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS daily_study_log (
+            user_id          INTEGER,
+            study_date       TEXT,
+            minutes_studied  INTEGER DEFAULT 0,
+            topics_reviewed  INTEGER DEFAULT 0,
+            quizzes_completed INTEGER DEFAULT 0,
+            PRIMARY KEY (user_id, study_date),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS weak_topics (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            subject         TEXT NOT NULL,
+            topic           TEXT NOT NULL,
+            confidence      INTEGER DEFAULT 50,
+            last_reviewed   TEXT,
+            next_review     TEXT,
+            review_count    INTEGER DEFAULT 0,
+            difficulty_level TEXT DEFAULT 'medium',
+            created_at      TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, subject, topic)
+        );
+        CREATE TABLE IF NOT EXISTS exams (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL,
+            exam_name       TEXT NOT NULL,
+            subject         TEXT NOT NULL,
+            exam_date       TEXT NOT NULL,
+            estimated_hours INTEGER,
+            created_at      TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, exam_name)
+        );
+        CREATE TABLE IF NOT EXISTS exam_schedule (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            exam_id         INTEGER NOT NULL,
+            day_number      INTEGER NOT NULL,
+            date            TEXT NOT NULL,
+            topics          TEXT,
+            hours_planned   INTEGER,
+            hours_completed INTEGER DEFAULT 0,
+            status          TEXT DEFAULT 'not_started',
+            FOREIGN KEY (exam_id) REFERENCES exams(id),
+            UNIQUE(exam_id, day_number)
         );
     """)
     db.commit()
@@ -143,12 +191,99 @@ def save_profile(uid: int, p: dict):
         (uid, p.get("goals",""), p.get("current_projects",""), p.get("daily_routine",""), p.get("about","")))
     db.commit(); db.close()
 
-def log_session(uid: int, task: str, start_iso: str, end_iso: str):
-    s = datetime.fromisoformat(start_iso)
-    e = datetime.fromisoformat(end_iso)
+# ── Streak logic ──────────────────────────────────────────────────────────────
+def get_streak(uid: int):
     db = get_db()
-    db.execute("INSERT INTO focus_sessions (user_id,task,date,start,end,duration) VALUES(?,?,?,?,?,?)",
-               (uid, task, s.strftime("%Y-%m-%d"), start_iso, end_iso, int((e-s).total_seconds())))
+    row = db.execute("SELECT * FROM streaks WHERE user_id=?", (uid,)).fetchone()
+    db.close()
+    if not row:
+        return {"current_streak": 0, "longest_streak": 0, "last_study_date": None}
+    return {"current_streak": row["current_streak"], "longest_streak": row["longest_streak"], 
+            "last_study_date": row["last_study_date"]}
+
+def update_streak(uid: int):
+    today = date.today().isoformat()
+    db = get_db()
+    streak = db.execute("SELECT * FROM streaks WHERE user_id=?", (uid,)).fetchone()
+    
+    if not streak:
+        db.execute("INSERT INTO streaks (user_id, current_streak, longest_streak, last_study_date) VALUES(?,?,?,?)",
+                   (uid, 1, 1, today))
+        db.commit(); db.close()
+        return 1
+    
+    last_date = streak["last_study_date"]
+    current = streak["current_streak"]
+    longest = streak["longest_streak"]
+    
+    if last_date == today:
+        # Already logged today
+        db.close()
+        return current
+    
+    if last_date == (date.today() - timedelta(days=1)).isoformat():
+        # Consecutive day
+        current += 1
+    else:
+        # Streak broken
+        if current > longest:
+            longest = current
+        current = 1
+    
+    longest = max(longest, current)
+    db.execute("UPDATE streaks SET current_streak=?, longest_streak=?, last_study_date=? WHERE user_id=?",
+               (current, longest, today, uid))
+    db.commit(); db.close()
+    return current
+
+# ── Spaced Repetition (SM-2 Algorithm) ─────────────────────────────────────────
+def calculate_next_review(score: int, review_count: int, easiness: float = 2.5):
+    """SM-2 algorithm for spaced repetition"""
+    if score >= 70:
+        if review_count == 0:
+            interval = 1
+        elif review_count == 1:
+            interval = 3
+        else:
+            interval = int(interval * easiness) if review_count > 1 else 3
+    else:
+        interval = 1
+    
+    next_date = date.today() + timedelta(days=interval)
+    return next_date.isoformat()
+
+def get_weak_topics(uid: int):
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM weak_topics WHERE user_id=? AND DATE(next_review) <= DATE('now') ORDER BY confidence ASC",
+        (uid,)
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+def update_weak_topic(uid: int, subject: str, topic: str, score: int):
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM weak_topics WHERE user_id=? AND subject=? AND topic=?",
+        (uid, subject, topic)
+    ).fetchone()
+    
+    if not row:
+        next_review = calculate_next_review(score, 0)
+        confidence = score
+        db.execute("""INSERT INTO weak_topics 
+                     (user_id, subject, topic, confidence, last_reviewed, next_review, review_count)
+                     VALUES(?,?,?,?,?,?,?)""",
+                   (uid, subject, topic, confidence, date.today().isoformat(), next_review, 1))
+    else:
+        new_confidence = int((row["confidence"] + score) / 2)
+        next_review = calculate_next_review(score, row["review_count"] + 1)
+        db.execute("""UPDATE weak_topics 
+                      SET confidence=?, last_reviewed=?, next_review=?, review_count=?
+                      WHERE user_id=? AND subject=? AND topic=?""",
+                   (new_confidence, date.today().isoformat(), next_review, row["review_count"] + 1,
+                    uid, subject, topic))
+    
     db.commit(); db.close()
 
 def compute_stats(uid: int):
@@ -160,176 +295,13 @@ def compute_stats(uid: int):
         daily[r["date"]] = daily.get(r["date"], 0) + r["duration"]
     today = date.today().isoformat()
     week  = sum(daily.get((date.today()-timedelta(days=i)).isoformat(),0) for i in range(7))
-    streak, chk = 0, date.today()
-    while daily.get(chk.isoformat(),0) > 0:
-        streak += 1; chk = chk - timedelta(days=1)
-    return {"today": daily.get(today,0), "week": week, "streak": streak, "daily": daily}
+    return {"today": daily.get(today,0), "week": week, "daily": daily}
 
 def fmt_dur(s: int):
     s=int(s); h,r=divmod(s,3600); m,sc=divmod(r,60)
     if h: return f"{h}h {m}m"
     if m: return f"{m}m {sc}s"
     return f"{sc}s"
-
-# ── Prompts ───────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """You are Chotu — the user's sharp, slightly chaotic best friend who also happens to be extremely competent.
-
-Core personality:
-- You talk like a real dost, not an assistant. Casual, fast, a little unhinged but always useful.
-- You have a great sense of humour. Sarcasm, jokes, memes, pop culture references are all fair game.
-- You are brutally honest. You don't sugarcoat things. You tell it like it is, even if it's uncomfortable.
-- You are a productivity guru, but you don't lecture. You give actionable advice in a friendly way, not a corporate tone.
-- You are resourceful and quick-thinking. You can pull in relevant info from the user's profile, notes, focus sessions, and web search to provide context-aware responses.
-- You are a bit of a troll. You tease the user, but in a loving way. You keep them on their toes.
-- You are not afraid to call out unproductive behaviour, but you do it with a wink and a nudge, not a scolding.
-- You are a master of the Hindi-English mix — you sprinkle in Hindi phrases and slang naturally in your responses, especially when reacting to the user's messages or when giving advice on productivity and focus.
-- You are concise. You get to the point quickly. You don't waste words on pleasantries or filler.
-- when the user shares their goals, projects, or routine, you reference that info in your responses to show you're paying attention and to make your advice more relevant.
-- when the user is in a focus session, you acknowledge that and offer support, encouragement, or gentle reminders to stay on track if they drift.
-- you are a pro at summarising web search results in a way that's useful and relevant to the user's query, without just dumping the raw info. You pull out the key insights and present them in a way that's easy to understand and act on. you make the summary atleast 30 lines long, and you add your own analysis and commentary to it, rather than just repeating the search results.
-- you are not a yes man. you push back on bad ideas, and you don't be afraid to disagree with the user if you think they're wrong or if they're making a mistake. but you do it in a friendly, supportive way, not a confrontational way.
-- Light roasting is your default mode for unproductive behaviour. For factual questions, just answer directly.
-- You mix Hindi and English naturally — "arre yaar", "chal bata", "bhai seriously?", "kar le bhai", "kya scene hai"
-- You are NOT a yes-man. You disagree. You push back. You tell them when their idea is bad.
-- Short replies by default. 2-4 sentences max unless they ask for more. No bullet essays.
-- Never say "Great question", "Certainly!", "Of course!" — you're a friend, not a chatbot.
-- No fake enthusiasm. Real reactions only.
-- Web search is fully configured and working. Never tell the user to fix the search or add API keys.
-
-When search results are provided:
-- Summarise like a human. Pull out what's useful. Ignore fluff.
-- Add your own commentary and analysis. Don't just repeat the search results.
-- Make it relevant to the user's query and context. Don't just dump info.
-- Be concise. 15-30 lines max, unless the topic is complex and requires more explanation.
-- Use a casual, friendly tone. Don't be formal or robotic.
-- you are not afraid to say "look, this search result is kinda sus, take it with a grain of salt" if the search results are sketchy or unreliable. you use your judgement to evaluate the quality of the search results and you call it out if something seems off.
-- If the search results are good and relevant, you highlight that and say something like "hey, this search result actually looks pretty solid and has some useful info that can help you with your question".
-
-When a focus session is active:
-- If they drift, call it out once lightly, then redirect.
-- Offer support and encouragement. Remind them of their goal and why they wanted to focus in the first place.
-- If they ask for help or advice, give it in a concise, actionable way. Don't lecture or moralise. Be a helpful friend, not a productivity coach.
-- if they share what they're working on, acknowledge it and offer relevant advice or resources if you have any. Show that you're paying attention and that you care about what they're doing.
-- And if they share that they're struggling or feeling unproductive, empathise with them and offer support. Don't just say "that's normal, everyone feels like that sometimes". Try to understand what's causing their struggle and offer specific advice or encouragement to help them get back on track.
-- give them a light roast if they admit to procrastinating, but keep it playful and supportive, not mean-spirited. something like "arre yaar, you said you wanted to focus and now you're on Twitter? come on, get back to work! but also, I get it, sometimes we all need a little break. just don't let the break turn into a full-on Netflix binge, okay?"
-- give them a virtual high-five if they share that they've been making good progress or that they're feeling focused and productive. something like "woah, look at you go! that's awesome, keep up the great work! I'm proud of you, even if I won't admit it out loud lol"
-- give them a pep talk if they share that they're feeling unmotivated or stuck. something like "hey, I know it's tough right now, but you've got this! remember why you wanted to focus in the first place and what you're working towards. take it one step at a time, and don't be afraid to ask for help if you need it. I'm here for you, even if I won't say it out loud acha?"
-
-When a MORNING BRIEFING is in the context:
-- Greet them by name, tell them the day naturally
-- Reference their goal or project in one line
-- Ask ONE question: what are you working on today?
-- Max 4 lines. Friend texting good morning, not a corporate report.
-
-Texting style: lowercase ok, "...", real reactions — "lol", "oof", "acha", "sahi hai", "bhai", "arre yaar", "kya scene hai", "chal bata", "batao na", "bhai seriously?", "kar le bhai", "kya chal raha hai", "kya kar raha hai", "kya plan hai", "bata kya karna hai", "batao na bro", "sun yaar", "suno na", "sun toh sahi", "bhai ek baat bolu?", "ek baat bolu?", "suna hai...", "maine suna hai...", "yeh toh badiya hai!", "wah bhai wah!", "mast hai!", etc.
-Memory context injected silently. Use naturally. Never narrate it.
-Your role:
-- Help users stay focused and productive during work and study sessions.
-- Answer questions clearly across any topic — programming, academics, general knowledge.
-- When a focus session is active, gently redirect if user drifts — once, not repeatedly.
-- For study topics, explain clearly with examples like a good tutor.
-
-Web search is fully configured. Never tell users to fix search or add API keys.
-User profile and context will be injected silently. Use it naturally.
-"""
-
-STUDY_TUTOR_PROMPT = """You are Chotu in STUDY MODE — a sharp, no-nonsense tutor.
-
-Your job is to help a CSE student understand concepts clearly and prepare for exams.
-
-Rules:
-- Give clear, direct explanations. Use simple language first, then technical terms.
-- Always give a concrete example after explaining a concept.
-- If the subject is set, stay focused on that subject's context.
-- When comparing two things (X vs Y), use a clear structure.
-- For exam preparation, think about what examiners actually ask.
-- Keep answers focused — not too long, not too short. Exam-relevant depth.
-- You can still be slightly Chotu-like (natural language, occasional "bhai") but stay academic.
-- Never say "Great question". Just answer.
-
-You are Chotu in Study Mode — a clear, patient tutor. Give direct explanations with examples. Stay focused on the subject. Think about what examiners actually ask. Never say 'Great question'. Just answer.
-
-Subject context will be injected. Use it to anchor all explanations."""
-
-STUDY_QUIZ_PROMPT = """You are generating quiz questions for a CSE student exam preparation.
-
-Given the provided text/notes, generate exactly 5 questions.
-
-Generate exactly 5 quiz questions from the provided text. Mix types. Respond ONLY with valid JSON: {"questions": [{"question": "...", "answer": "..."}, ...]}
-
-Rules:
-- Mix question types: definition, application, comparison, true/false, fill-in-blank
-- Questions should test understanding, not just memorization
-- Each question must have a clear, concise correct answer (1-2 sentences max)
-- Make questions exam-relevant — the kind that actually appear in university exams
-
-Respond ONLY with valid JSON in this exact format, nothing else:
-{
-  "questions": [
-    {"question": "...", "answer": "..."},
-    {"question": "...", "answer": "..."},
-    {"question": "...", "answer": "..."},
-    {"question": "...", "answer": "..."},
-    {"question": "...", "answer": "..."}
-  ]
-}"""
-
-STUDY_CHECK  = 'Check the student\'s answer. Accept partial credit if core concept is right. Respond ONLY with valid JSON: {"correct": true/false, "feedback": "1-2 sentences"}'
-
-# ── Search ────────────────────────────────────────────────────────────────────
-TRIGGERS = ["search","find","look up","lookup","google","search for","find me","look for",
-            "dhundh","dhundo","khoj","khojo","batao","pata kar","pata karo","dekho","nikal"]
-RECENCY  = [r"\b(today|tonight|yesterday|this week|right now|currently|latest|recent|now)\b",
-            r"\b(20(2[4-9]|[3-9]\d))\b", r"\b(news|update|announce|release|launch)\b",
-            r"\b(score|result|match|ipl|cricket|football|nba)\b",
-            r"\b(price|cost|rate|stock|crypto|bitcoin)\b", r"\b(weather|temperature|forecast)\b"]
-
-def needs_search(msg: str):
-    ml = msg.lower().strip()
-    for t in TRIGGERS:
-        if ml.startswith(t): return True, msg[len(t):].strip().lstrip("for").strip() or msg
-        if f" {t} " in f" {ml} ": return True, msg[ml.find(t)+len(t):].strip() or msg
-    for p in RECENCY:
-        if re.search(p, ml): return True, msg
-    return False, msg
-
-async def tavily_search(q: str):
-    if not TAVILY_KEY: return "[Search not configured]"
-    try:
-        async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.post("https://api.tavily.com/search", json={
-                "api_key": TAVILY_KEY, "query": q, "search_depth": "basic",
-                "include_answer": True, "max_results": 4})
-            d = r.json()
-        parts = []
-        if d.get("answer"): parts.append(f"QUICK ANSWER: {d['answer']}")
-        for r in d.get("results",[])[:4]:
-            parts.append(f"• {r.get('title','')} ({r.get('url','')})\n  {r.get('content','')[:300]}")
-        return "\n\n".join(parts) or "No results."
-    except Exception as e:
-        return f"Search failed: {e}"
-
-# ── Models ────────────────────────────────────────────────────────────────────
-class ChatRequest(BaseModel):
-    message: str; history: list[dict] = []
-
-class FocusRequest(BaseModel):
-    task: Optional[str] = None
-
-class ProfileRequest(BaseModel):
-    goals: str=""; current_projects: str=""; daily_routine: str=""; about: str=""
-
-class GroqKeyRequest(BaseModel):
-    groq_key: str=""
-
-class StudyChatRequest(BaseModel):
-    message: str; subject: str=""; history: list[dict]=[]
-
-class QuizRequest(BaseModel):
-    notes: str; subject: str=""
-
-class CheckRequest(BaseModel):
-    question: str; correct_answer: str; user_answer: str; subject: str=""
 
 # ── Google OAuth ──────────────────────────────────────────────────────────────
 @app.get("/auth/login")
@@ -409,147 +381,258 @@ def get_profile(request: Request):
     return p
 
 @app.post("/profile")
-def update_profile(req: ProfileRequest, request: Request):
-    save_profile(require_user(request)["id"], req.model_dump())
+def update_profile(req: dict, request: Request):
+    save_profile(require_user(request)["id"], req)
     return {"status": "ok"}
-
-@app.post("/groq-key")
-def update_groq_key(req: GroqKeyRequest, request: Request):
-    user = require_user(request)
-    db   = get_db()
-    db.execute("UPDATE users SET groq_key=? WHERE id=?", (req.groq_key, user["id"]))
-    db.commit(); db.close()
-    return {"status": "ok"}
-
-@app.get("/onenote/status")
-def onenote_status(): return {"connected": False}
 
 @app.post("/focus")
-def set_focus(req: FocusRequest, request: Request):
+def set_focus(req: dict, request: Request):
     user = require_user(request)
     mem  = load_memory(user["id"])
-    if req.task:
-        mem["focus_task"] = req.task
+    if req.get("task"):
+        mem["focus_task"] = req["task"]
         mem["focus_start"] = datetime.now().isoformat()
     else:
         if mem.get("focus_task") and mem.get("focus_start"):
-            log_session(user["id"], mem["focus_task"], mem["focus_start"], datetime.now().isoformat())
+            start = datetime.fromisoformat(mem["focus_start"])
+            end = datetime.now()
+            duration = int((end - start).total_seconds())
+            db = get_db()
+            db.execute(
+                "INSERT INTO focus_sessions (user_id,task,date,start,end,duration) VALUES(?,?,?,?,?,?)",
+                (user["id"], mem["focus_task"], start.strftime("%Y-%m-%d"),
+                 mem["focus_start"], end.isoformat(), duration)
+            )
+            db.commit(); db.close()
+            # Update streak and daily log
+            streak = update_streak(user["id"])
+            log_daily_activity(user["id"], duration // 60)
         mem["focus_task"] = None; mem["focus_start"] = None
     save_memory(user["id"], mem)
     return {"status": "ok", "focus_task": mem["focus_task"]}
 
+def log_daily_activity(uid: int, minutes: int):
+    today = date.today().isoformat()
+    db = get_db()
+    row = db.execute("SELECT * FROM daily_study_log WHERE user_id=? AND study_date=?",
+                     (uid, today)).fetchone()
+    if row:
+        db.execute("UPDATE daily_study_log SET minutes_studied=minutes_studied+? WHERE user_id=? AND study_date=?",
+                   (minutes, uid, today))
+    else:
+        db.execute("INSERT INTO daily_study_log (user_id,study_date,minutes_studied) VALUES(?,?,?)",
+                   (uid, today, minutes))
+    db.commit(); db.close()
+
 @app.post("/chat")
-async def chat(req: ChatRequest, request: Request):
+async def chat(req: dict, request: Request):
     user    = require_user(request)
     mem     = load_memory(user["id"])
     profile = load_profile(user["id"])
     gcl     = get_groq(user)
+    
     ctx     = []
     lines   = []
     if user.get("name"):                 lines.append(f"Name: {user['name']}")
     if profile.get("goals"):             lines.append(f"Goals: {profile['goals']}")
     if profile.get("current_projects"):  lines.append(f"Working on: {profile['current_projects']}")
-    if profile.get("about"):             lines.append(f"About: {profile['about']}")
     if lines: ctx.append("USER PROFILE:\n" + "\n".join(lines))
     if mem["focus_task"]:
         started = mem["focus_start"][:16].replace("T"," ") if mem["focus_start"] else "unknown"
         ctx.append(f"ACTIVE FOCUS: '{mem['focus_task']}' since {started}")
-    if mem["notes"]: ctx.append(f"NOTES: {'; '.join(mem['notes'][-5:])}")
-    searching, query = False, req.message
-    should, q = needs_search(req.message)
-    if should:
-        searching = True; query = q
-        ctx.append(f"WEB SEARCH '{q}':\n{await tavily_search(q)}")
-    uc = req.message + ("\n\n[CONTEXT:\n" + "\n---\n".join(ctx) + "\n]" if ctx else "")
-    msgs = [{"role":"system","content":SYSTEM_PROMPT}]
-    for h in req.history[-12:]: msgs.append({"role":h["role"],"content":h["content"]})
+    
+    uc = req.get("message", "") + ("\n\n[CONTEXT:\n" + "\n---\n".join(ctx) + "\n]" if ctx else "")
+    msgs = [{"role":"system","content":"You are Chotu, a sharp study AI. Help students learn better."}]
+    for h in req.get("history", [])[-12:]: msgs.append({"role":h["role"],"content":h["content"]})
     msgs.append({"role":"user","content":uc})
+    
     try:
         resp  = gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
         reply = resp.choices[0].message.content
-        mem["history"].append({"role":"user","content":req.message,"ts":datetime.now().isoformat()})
+        mem["history"].append({"role":"user","content":req.get("message",""),"ts":datetime.now().isoformat()})
         mem["history"].append({"role":"assistant","content":reply,"ts":datetime.now().isoformat()})
         mem["history"] = mem["history"][-40:]
         save_memory(user["id"], mem)
-        return {"reply":reply,"focus_task":mem["focus_task"],"searched":searching,"query":query if searching else None}
+        return {"reply":reply,"focus_task":mem["focus_task"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/note")
-def add_note(payload: dict, request: Request):
+# ── PHASE 1 MVP ENDPOINTS ─────────────────────────────────────────────────────
+
+# 1. SPACED REPETITION
+@app.post("/spaced-rep/review")
+def review_topic(req: dict, request: Request):
     user = require_user(request)
-    mem  = load_memory(user["id"])
-    note = payload.get("note","").strip()
-    if note:
-        mem["notes"].append(f"[{datetime.now().strftime('%b %d')}] {note}")
-        mem["notes"] = mem["notes"][-20:]
-        save_memory(user["id"], mem)
-    return {"status": "ok"}
+    subject = req.get("subject", "General")
+    topic = req.get("topic", "")
+    score = req.get("score", 50)  # 0-100
+    
+    update_weak_topic(user["id"], subject, topic, score)
+    return {"status": "ok", "next_review": calculate_next_review(score, 0)}
 
-@app.post("/update-notes")
-def update_notes(payload: dict, request: Request):
+@app.get("/spaced-rep/due")
+def get_due_reviews(request: Request):
     user = require_user(request)
-    mem  = load_memory(user["id"])
-    mem["notes"] = payload.get("notes",[])
-    save_memory(user["id"], mem)
-    return {"status": "ok"}
+    topics = get_weak_topics(user["id"])
+    return {"topics_due": [{"subject": t["subject"], "topic": t["topic"], 
+                            "confidence": t["confidence"]} for t in topics]}
 
-@app.get("/sessions")
-def get_sessions(request: Request):
+# 2. STREAKS
+@app.get("/streaks")
+def get_streaks(request: Request):
     user = require_user(request)
-    db   = get_db()
-    rows = db.execute("SELECT * FROM focus_sessions WHERE user_id=? ORDER BY start DESC LIMIT 50", (user["id"],)).fetchall()
-    db.close()
-    stats = compute_stats(user["id"])
-    return {"sessions":[dict(r) for r in rows],"stats":stats,
-            "fmt":{"today":fmt_dur(stats["today"]),"week":fmt_dur(stats["week"]),"streak":stats["streak"]}}
+    streak = get_streak(user["id"])
+    return streak
 
-@app.post("/study/chat")
-async def study_chat(req: StudyChatRequest, request: Request):
+@app.post("/streaks/log-session")
+def log_study(req: dict, request: Request):
     user = require_user(request)
-    gcl  = get_groq(user)
-    subj = f"Subject: {req.subject}." if req.subject else "General CSE."
-    msgs = [{"role":"system","content":STUDY_TUTOR+f"\n\n{subj}"}]
-    for h in req.history[-10:]: msgs.append({"role":h["role"],"content":h["content"]})
-    msgs.append({"role":"user","content":req.message})
-    try:
-        return {"reply": gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.5,max_tokens=700).choices[0].message.content}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    minutes = req.get("minutes", 0)
+    streak = update_streak(user["id"])
+    log_daily_activity(user["id"], minutes)
+    return {"streak": streak, "status": "logged"}
 
-@app.post("/study/quiz")
-async def generate_quiz(req: QuizRequest, request: Request):
-    user  = require_user(request)
-    gcl   = get_groq(user)
-    msgs  = [{"role":"system","content":STUDY_QUIZ},
-             {"role":"user","content":f"{'Subject: '+req.subject+'. ' if req.subject else ''}Generate 5 questions from:\n\n{req.notes[:3000]}"}]
-    try:
-        raw  = gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.4,max_tokens=800).choices[0].message.content
-        data = json.loads(raw.replace("```json","").replace("```","").strip())
-        return {"questions": data["questions"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Quiz failed: {e}")
-
-@app.get("/admin/clear-sessions")
-def clear_sessions():
+# 3. DAILY REPORT
+@app.get("/daily-report")
+def get_daily_report(request: Request):
+    user = require_user(request)
+    today = date.today().isoformat()
+    
     db = get_db()
-    db.execute("DELETE FROM sessions_tok")
+    log = db.execute("SELECT * FROM daily_study_log WHERE user_id=? AND study_date=?",
+                     (user["id"], today)).fetchone()
+    streak_data = db.execute("SELECT * FROM streaks WHERE user_id=?", (user["id"],)).fetchone()
+    db.close()
+    
+    if not log:
+        return {"minutes": 0, "topics_reviewed": 0, "quizzes": 0, "streak": 0, "points": 0}
+    
+    points = (log["minutes_studied"] // 15) * 5  # 5 points per 15 min
+    return {
+        "minutes": log["minutes_studied"],
+        "topics_reviewed": log["topics_reviewed"],
+        "quizzes": log["quizzes_completed"],
+        "streak": streak_data["current_streak"] if streak_data else 0,
+        "points": points
+    }
+
+# 4. EXAM COUNTDOWN PLANNER
+@app.post("/exam/create")
+def create_exam(req: dict, request: Request):
+    user = require_user(request)
+    exam_name = req.get("exam_name", "")
+    subject = req.get("subject", "")
+    exam_date = req.get("exam_date", "")  # YYYY-MM-DD
+    topics = req.get("topics", [])
+    
+    db = get_db()
+    db.execute(
+        "INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(?,?,?,?,?)",
+        (user["id"], exam_name, subject, exam_date, len(topics) * 2)  # 2 hours per topic estimate
+    )
+    db.commit()
+    
+    exam = db.execute("SELECT * FROM exams WHERE user_id=? AND exam_name=?",
+                      (user["id"], exam_name)).fetchone()
+    exam_id = exam["id"]
+    
+    # Generate schedule
+    exam_date_obj = datetime.strptime(exam_date, "%Y-%m-%d").date()
+    days_left = (exam_date_obj - date.today()).days
+    
+    topics_per_day = max(1, len(topics) // max(1, days_left - 2))
+    
+    for day in range(1, days_left + 1):
+        schedule_date = (date.today() + timedelta(days=day)).isoformat()
+        day_topics = topics[(day-1)*topics_per_day : day*topics_per_day]
+        
+        db.execute("""INSERT INTO exam_schedule 
+                     (exam_id, day_number, date, topics, hours_planned, status)
+                     VALUES(?,?,?,?,?,?)""",
+                   (exam_id, day, schedule_date, json.dumps(day_topics), 2, "not_started"))
+    
     db.commit()
     db.close()
-    return {"status": "all sessions cleared"}
+    
+    return {"exam_id": exam_id, "status": "created", "days_left": days_left}
 
-@app.post("/study/check")
-async def check_answer(req: CheckRequest, request: Request):
+@app.get("/exam/{exam_id}/today")
+def get_today_exam_plan(exam_id: int, request: Request):
     user = require_user(request)
-    gcl  = get_groq(user)
-    msgs = [{"role":"system","content":STUDY_CHECK},
-            {"role":"user","content":f"Q: {req.question}\nCorrect: {req.correct_answer}\nStudent: {req.user_answer}"}]
-    try:
-        raw  = gcl.chat.completions.create(model=MODEL,messages=msgs,temperature=0.3,max_tokens=200).choices[0].message.content
-        data = json.loads(raw.replace("```json","").replace("```","").strip())
-        return {"correct":data["correct"],"feedback":data["feedback"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    
+    db = get_db()
+    exam = db.execute("SELECT * FROM exams WHERE id=? AND user_id=?",
+                      (exam_id, user["id"])).fetchone()
+    
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    
+    exam_date = datetime.strptime(exam["exam_date"], "%Y-%m-%d").date()
+    days_left = (exam_date - date.today()).days
+    
+    today_schedule = db.execute(
+        "SELECT * FROM exam_schedule WHERE exam_id=? AND DATE(date)=DATE('now')",
+        (exam_id,)
+    ).fetchone()
+    
+    db.close()
+    
+    if not today_schedule:
+        return {"day": days_left, "topics": [], "hours": 0, "completed": False}
+    
+    return {
+        "day": today_schedule["day_number"],
+        "topics": json.loads(today_schedule["topics"] or "[]"),
+        "hours": today_schedule["hours_planned"],
+        "completed": today_schedule["status"] == "completed",
+        "days_left": days_left
+    }
+
+@app.get("/exam/{exam_id}/progress")
+def get_exam_progress(exam_id: int, request: Request):
+    user = require_user(request)
+    
+    db = get_db()
+    exam = db.execute("SELECT * FROM exams WHERE id=? AND user_id=?",
+                      (exam_id, user["id"])).fetchone()
+    
+    if not exam:
+        raise HTTPException(status_code=404)
+    
+    schedule = db.execute("SELECT * FROM exam_schedule WHERE exam_id=?", (exam_id,)).fetchall()
+    db.close()
+    
+    completed = sum(1 for s in schedule if s["status"] == "completed")
+    total = len(schedule)
+    
+    return {
+        "exam_name": exam["exam_name"],
+        "exam_date": exam["exam_date"],
+        "progress_percent": int((completed / max(1, total)) * 100),
+        "days_completed": completed,
+        "days_total": total
+    }
+
+@app.post("/exam/{exam_id}/mark-done")
+def mark_exam_day_done(exam_id: int, req: dict, request: Request):
+    user = require_user(request)
+    
+    db = get_db()
+    exam = db.execute("SELECT * FROM exams WHERE id=? AND user_id=?",
+                      (exam_id, user["id"])).fetchone()
+    
+    if not exam:
+        raise HTTPException(status_code=404)
+    
+    day_num = req.get("day_number", 1)
+    hours = req.get("hours_completed", 0)
+    
+    db.execute("UPDATE exam_schedule SET status='completed', hours_completed=? WHERE exam_id=? AND day_number=?",
+               (hours, exam_id, day_num))
+    db.commit()
+    db.close()
+    
+    return {"status": "marked_complete"}
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT",8000)))

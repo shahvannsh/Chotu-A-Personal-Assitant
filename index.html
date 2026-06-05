@@ -591,6 +591,19 @@ body::after{content:'';position:fixed;inset:0;background:var(--web-overlay);poin
         <input class="note-input" id="noteInput" placeholder="Add note..." maxlength="200"/>
         <button class="note-add-btn" onclick="addNote()">+</button>
       </div>
+    <div>
+      <div class="section-label">🔥 STREAK</div>
+      <div style="background:var(--focus-btn-bg);border:1px solid var(--accent);border-radius:6px;padding:10px;text-align:center;"><div style="font-family:var(--section-font);font-size:28px;color:var(--accent);letter-spacing:2px;"><span id="streak-count">0</span> 🔥</div><div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:4px;">Best: <span id="streak-best">0</span> days</div></div>
+    </div>
+    <div>
+      <div class="section-label">📊 TODAY</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;"><div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:6px;">⏱️ <span id="today-minutes">0</span> min</div><div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">⭐ <span id="today-points">0</span> pts</div></div>
+    </div>
+    <div>
+      <div class="section-label">📅 EXAMS</div>
+      <button onclick="openExamModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;letter-spacing:1px;">+ ADD EXAM</button>
+    </div>
+
     </div>
   </aside>
 

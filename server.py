@@ -74,6 +74,70 @@ def init_db():
             duration INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS knowledge_graph (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_topic TEXT NOT NULL,
+            target_topic TEXT NOT NULL,
+            relationship TEXT,
+            strength FLOAT DEFAULT 0.5,
+            subject TEXT NOT NULL,
+            UNIQUE(source_topic, target_topic, subject)
+        );
+        CREATE TABLE IF NOT EXISTS quiz_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            question TEXT NOT NULL,
+            options TEXT,
+            correct_answer TEXT NOT NULL,
+            difficulty INTEGER,
+            pass_rate FLOAT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS quiz_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            question_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            user_answer TEXT,
+            is_correct BOOLEAN,
+            time_spent_seconds INTEGER,
+            attempted_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (question_id) REFERENCES quiz_questions(id)
+        );
+        CREATE TABLE IF NOT EXISTS mock_exams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            exam_name TEXT,
+            total_questions INTEGER,
+            score INTEGER,
+            time_taken_minutes INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS mock_exam_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mock_exam_id INTEGER NOT NULL,
+            topic TEXT NOT NULL,
+            correct INTEGER,
+            total INTEGER,
+            performance TEXT,
+            FOREIGN KEY (mock_exam_id) REFERENCES mock_exams(id)
+        );
+        CREATE TABLE IF NOT EXISTS student_mistakes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            mistake_pattern TEXT,
+            frequency INTEGER DEFAULT 1,
+            last_occurred TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS streaks (
             user_id          INTEGER PRIMARY KEY,
             current_streak   INTEGER DEFAULT 0,
@@ -636,3 +700,460 @@ def mark_exam_day_done(exam_id: int, req: dict, request: Request):
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT",8000)))
+# This file contains ADDITIONS to the existing server.py
+# Copy the Phase 1 server.py first, then add these routes and functions below the Phase 1 endpoints
+
+# ════════════════════════════════════════════════════════════════════════════
+# PHASE 2: KNOWLEDGE GRAPH + MOCK EXAMS + WEAK TOPIC COACHING
+# ════════════════════════════════════════════════════════════════════════════
+
+# Add these imports at the top of server.py:
+# from sklearn.metrics.pairwise import cosine_similarity
+# import numpy as np
+
+# Add these tables to init_db():
+"""
+CREATE TABLE IF NOT EXISTS knowledge_graph (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_topic TEXT NOT NULL,
+    target_topic TEXT NOT NULL,
+    relationship TEXT,  -- prerequisite, builds_on, similar
+    strength FLOAT DEFAULT 0.5,
+    subject TEXT NOT NULL,
+    UNIQUE(source_topic, target_topic, subject)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    question TEXT NOT NULL,
+    options TEXT,  -- JSON array
+    correct_answer TEXT NOT NULL,
+    difficulty INTEGER (1-5),
+    pass_rate FLOAT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    user_answer TEXT,
+    is_correct BOOLEAN,
+    time_spent_seconds INTEGER,
+    attempted_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (question_id) REFERENCES quiz_questions(id)
+);
+
+CREATE TABLE IF NOT EXISTS mock_exams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    exam_name TEXT,
+    total_questions INTEGER,
+    score INTEGER,
+    time_taken_minutes INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS mock_exam_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mock_exam_id INTEGER NOT NULL,
+    topic TEXT NOT NULL,
+    correct INTEGER,
+    total INTEGER,
+    performance TEXT,  -- easy, medium, hard
+    FOREIGN KEY (mock_exam_id) REFERENCES mock_exams(id)
+);
+
+CREATE TABLE IF NOT EXISTS student_mistakes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    mistake_pattern TEXT,  -- e.g., "forgets edge cases", "wrong formula"
+    frequency INTEGER DEFAULT 1,
+    last_occurred TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+"""
+
+# ── PHASE 2 API ENDPOINTS ─────────────────────────────────────────────────
+
+# 1. KNOWLEDGE GRAPH
+@app.post("/graph/build")
+def build_knowledge_graph(req: dict, request: Request):
+    """Generate knowledge graph for a subject"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    topics = req.get("topics", [])
+    
+    if not subject or not topics:
+        raise HTTPException(status_code=400, detail="Subject and topics required")
+    
+    gcl = get_groq(user)
+    
+    # Use Groq to generate topic relationships
+    prompt = f"""For the subject "{subject}", I have these topics: {', '.join(topics)}
+
+For each pair of topics, determine if there's a relationship.
+Format response as JSON only:
+{{
+  "relationships": [
+    {{"source": "topic1", "target": "topic2", "relationship": "prerequisite", "strength": 0.8}},
+    {{"source": "topic2", "target": "topic3", "relationship": "builds_on", "strength": 0.9}}
+  ]
+}}
+
+Relationships: prerequisite (must learn first), builds_on (strengthens), similar (alternative approach)
+Strength: 0-1 (how strong is the relationship)
+"""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1000
+        )
+        
+        response_text = resp.choices[0].message.content
+        # Extract JSON
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            graph_data = json.loads(json_match.group())
+            
+            # Store in database
+            db = get_db()
+            for rel in graph_data.get("relationships", []):
+                db.execute("""
+                    INSERT OR IGNORE INTO knowledge_graph 
+                    (source_topic, target_topic, relationship, strength, subject)
+                    VALUES(?,?,?,?,?)
+                """, (rel["source"], rel["target"], rel["relationship"], rel["strength"], subject))
+            db.commit()
+            db.close()
+            
+            return {"status": "graph_built", "relationships": len(graph_data.get("relationships", []))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/graph/{subject}")
+def get_graph(subject: str, request: Request):
+    """Get knowledge graph for subject"""
+    user = require_user(request)
+    
+    db = get_db()
+    relationships = db.execute(
+        "SELECT * FROM knowledge_graph WHERE subject=?", (subject,)
+    ).fetchall()
+    db.close()
+    
+    # Format for visualization
+    nodes = set()
+    edges = []
+    
+    for rel in relationships:
+        nodes.add(rel["source_topic"])
+        nodes.add(rel["target_topic"])
+        edges.append({
+            "source": rel["source_topic"],
+            "target": rel["target_topic"],
+            "relationship": rel["relationship"],
+            "strength": rel["strength"]
+        })
+    
+    return {
+        "nodes": [{"id": n, "label": n} for n in nodes],
+        "edges": edges
+    }
+
+@app.get("/graph/{subject}/learning-path")
+def get_learning_path(subject: str, request: Request):
+    """Get recommended learning path (topological sort of prerequisites)"""
+    user = require_user(request)
+    
+    db = get_db()
+    relationships = db.execute(
+        "SELECT * FROM knowledge_graph WHERE subject=? AND relationship='prerequisite'",
+        (subject,)
+    ).fetchall()
+    db.close()
+    
+    # Simple topological sort
+    graph = {}
+    all_topics = set()
+    
+    for rel in relationships:
+        if rel["source_topic"] not in graph:
+            graph[rel["source_topic"]] = []
+        graph[rel["source_topic"]].append(rel["target_topic"])
+        all_topics.add(rel["source_topic"])
+        all_topics.add(rel["target_topic"])
+    
+    # Find topics with no prerequisites (roots)
+    has_prerequisite = set()
+    for rel in relationships:
+        has_prerequisite.add(rel["target_topic"])
+    
+    roots = [t for t in all_topics if t not in has_prerequisite]
+    
+    return {"learning_path": roots, "total_topics": len(all_topics)}
+
+# 2. MOCK EXAMS
+@app.post("/mock-exam/generate")
+def generate_mock_exam(req: dict, request: Request):
+    """Generate adaptive mock exam"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    num_questions = req.get("num_questions", 10)
+    difficulty = req.get("difficulty", "mixed")  # easy, medium, hard, mixed
+    
+    db = get_db()
+    
+    # Select questions based on difficulty
+    if difficulty == "mixed":
+        # 40% easy, 40% medium, 20% hard
+        easy_q = db.execute(
+            "SELECT * FROM quiz_questions WHERE subject=? AND difficulty<=2 ORDER BY RANDOM() LIMIT ?",
+            (subject, int(num_questions * 0.4))
+        ).fetchall()
+        med_q = db.execute(
+            "SELECT * FROM quiz_questions WHERE subject=? AND difficulty=3 ORDER BY RANDOM() LIMIT ?",
+            (subject, int(num_questions * 0.4))
+        ).fetchall()
+        hard_q = db.execute(
+            "SELECT * FROM quiz_questions WHERE subject=? AND difficulty>=4 ORDER BY RANDOM() LIMIT ?",
+            (subject, int(num_questions * 0.2))
+        ).fetchall()
+        questions = list(easy_q) + list(med_q) + list(hard_q)
+    else:
+        # Specific difficulty
+        diff_map = {"easy": 2, "medium": 3, "hard": 4}
+        diff_val = diff_map.get(difficulty, 3)
+        questions = db.execute(
+            "SELECT * FROM quiz_questions WHERE subject=? AND difficulty=? ORDER BY RANDOM() LIMIT ?",
+            (subject, diff_val, num_questions)
+        ).fetchall()
+    
+    db.close()
+    
+    if not questions:
+        raise HTTPException(status_code=404, detail="No questions found for this subject")
+    
+    # Create mock exam record
+    db = get_db()
+    db.execute(
+        "INSERT INTO mock_exams (user_id, subject, exam_name, total_questions) VALUES(?,?,?,?)",
+        (user["id"], subject, f"{subject} Mock Exam", len(questions))
+    )
+    db.commit()
+    
+    exam = db.execute(
+        "SELECT id FROM mock_exams WHERE user_id=? ORDER BY id DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    db.close()
+    
+    return {
+        "exam_id": exam["id"],
+        "total_questions": len(questions),
+        "questions": [{"id": q["id"], "question": q["question"], "options": json.loads(q["options"] or "[]")} 
+                      for q in questions[:1]]  # Return first question
+    }
+
+@app.post("/mock-exam/{exam_id}/answer")
+def submit_answer(exam_id: int, req: dict, request: Request):
+    """Submit answer to mock exam question"""
+    user = require_user(request)
+    question_id = req.get("question_id")
+    user_answer = req.get("user_answer")
+    time_spent = req.get("time_spent_seconds", 0)
+    
+    db = get_db()
+    
+    question = db.execute(
+        "SELECT * FROM quiz_questions WHERE id=?", (question_id,)
+    ).fetchone()
+    
+    if not question:
+        raise HTTPException(status_code=404)
+    
+    is_correct = user_answer == question["correct_answer"]
+    topic = question["topic"]
+    subject = question["subject"]
+    
+    # Log attempt
+    db.execute("""
+        INSERT INTO quiz_attempts 
+        (user_id, question_id, subject, topic, user_answer, is_correct, time_spent_seconds)
+        VALUES(?,?,?,?,?,?,?)
+    """, (user["id"], question_id, subject, topic, user_answer, is_correct, time_spent))
+    
+    # If wrong, detect mistake pattern
+    if not is_correct:
+        mistake = req.get("mistake_reason", "unknown")
+        db.execute("""
+            INSERT OR IGNORE INTO student_mistakes 
+            (user_id, subject, topic, mistake_pattern, frequency)
+            VALUES(?,?,?,?,1)
+        """, (user["id"], subject, topic, mistake))
+        db.execute("""
+            UPDATE student_mistakes 
+            SET frequency=frequency+1, last_occurred=datetime('now')
+            WHERE user_id=? AND subject=? AND topic=? AND mistake_pattern=?
+        """, (user["id"], subject, topic, mistake))
+    
+    db.commit()
+    db.close()
+    
+    return {"is_correct": is_correct, "correct_answer": question["correct_answer"]}
+
+@app.post("/mock-exam/{exam_id}/submit")
+def submit_mock_exam(exam_id: int, req: dict, request: Request):
+    """Submit completed mock exam and get results"""
+    user = require_user(request)
+    score = req.get("score", 0)
+    time_taken = req.get("time_taken_minutes", 0)
+    
+    db = get_db()
+    
+    # Update exam with results
+    db.execute(
+        "UPDATE mock_exams SET score=?, time_taken_minutes=? WHERE id=? AND user_id=?",
+        (score, time_taken, exam_id, user["id"])
+    )
+    
+    # Calculate performance by topic
+    attempts = db.execute("""
+        SELECT topic, is_correct FROM quiz_attempts 
+        WHERE user_id=? AND question_id IN (
+            SELECT id FROM quiz_questions WHERE subject=(
+                SELECT subject FROM mock_exams WHERE id=?
+            )
+        )
+    """, (user["id"], exam_id)).fetchall()
+    
+    topic_performance = {}
+    for attempt in attempts:
+        topic = attempt["topic"]
+        if topic not in topic_performance:
+            topic_performance[topic] = {"correct": 0, "total": 0}
+        topic_performance[topic]["total"] += 1
+        if attempt["is_correct"]:
+            topic_performance[topic]["correct"] += 1
+    
+    # Store results
+    for topic, perf in topic_performance.items():
+        pct = (perf["correct"] / perf["total"]) * 100
+        if pct >= 75:
+            performance = "strong"
+        elif pct >= 50:
+            performance = "medium"
+        else:
+            performance = "weak"
+        
+        db.execute("""
+            INSERT INTO mock_exam_results 
+            (mock_exam_id, topic, correct, total, performance)
+            VALUES(?,?,?,?,?)
+        """, (exam_id, topic, perf["correct"], perf["total"], performance))
+    
+    db.commit()
+    db.close()
+    
+    return {
+        "score": score,
+        "performance_by_topic": topic_performance,
+        "weak_topics": [t for t, p in topic_performance.items() if (p["correct"]/p["total"]) < 0.6]
+    }
+
+# 3. WEAK TOPIC COACHING
+@app.get("/coaching/patterns/{subject}")
+def get_mistake_patterns(subject: str, request: Request):
+    """Get student's common mistake patterns"""
+    user = require_user(request)
+    
+    db = get_db()
+    patterns = db.execute("""
+        SELECT topic, mistake_pattern, frequency, last_occurred
+        FROM student_mistakes
+        WHERE user_id=? AND subject=?
+        ORDER BY frequency DESC
+    """, (user["id"], subject)).fetchall()
+    db.close()
+    
+    return {"patterns": [dict(p) for p in patterns]}
+
+@app.post("/coaching/teach-pattern")
+def teach_pattern(req: dict, request: Request):
+    """AI teaches the pattern student keeps missing"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    topic = req.get("topic", "")
+    mistake_pattern = req.get("mistake_pattern", "")
+    
+    gcl = get_groq(user)
+    
+    prompt = f"""The student is making a mistake in {subject}/{topic}.
+Pattern: They {mistake_pattern}
+
+Create a focused 2-minute lesson:
+1. Explain WHY they're making this mistake
+2. Teach the correct approach with an example
+3. Give them a memory trick
+4. Ask them to try ONE simple problem
+
+Be direct, clear, and specific. No fluff."""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        lesson = resp.choices[0].message.content
+        return {"lesson": lesson}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/coaching/next-topic")
+def get_next_topic(request: Request):
+    """Suggest next topic based on weak areas"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Find topics with lowest confidence
+    weak = db.execute("""
+        SELECT subject, topic, confidence
+        FROM weak_topics
+        WHERE user_id=?
+        ORDER BY confidence ASC
+        LIMIT 5
+    """, (user["id"],)).fetchall()
+    
+    db.close()
+    
+    if not weak:
+        return {"next_topic": None, "recommendation": "You're on track! Keep studying."}
+    
+    topic = weak[0]
+    return {
+        "next_topic": topic["topic"],
+        "subject": topic["subject"],
+        "confidence": topic["confidence"],
+        "reason": f"Your {topic['topic']} confidence is only {topic['confidence']}%. Time to review?"
+    }
+
+# ════════════════════════════════════════════════════════════════════════════
+# END PHASE 2 ADDITIONS
+# ════════════════════════════════════════════════════════════════════════════

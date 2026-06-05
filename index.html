@@ -1645,5 +1645,33 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 
+
+<!-- MVP EXAM MODAL -->
+<div id="exam-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:380px;max-width:95vw;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:2px;margin-bottom:12px;">📅 ADD EXAM</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="exam-name" type="text" placeholder="Exam name" maxlength="50" style="background:var(--bg);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:11px;outline:none;" />
+      <input id="exam-subject" type="text" placeholder="Subject" maxlength="30" style="background:var(--bg);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:11px;outline:none;" />
+      <input id="exam-date" type="date" style="background:var(--bg);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:11px;outline:none;" />
+      <input id="exam-topics" type="text" placeholder="Topics (comma separated)" maxlength="200" style="background:var(--bg);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:11px;outline:none;" />
+      <div style="display:flex;gap:8px;">
+        <button onclick="createExam()" style="flex:1;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:bold;">CREATE</button>
+        <button onclick="closeExamModal()" style="flex:1;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;">CANCEL</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// MVP PHASE 1 FUNCTIONS
+async function loadMVPData(){try{const streak=await fetch('/streaks').then(r=>r.json());document.getElementById('streak-count').textContent=streak.current_streak||0;document.getElementById('streak-best').textContent=streak.longest_streak||0;const report=await fetch('/daily-report').then(r=>r.json());document.getElementById('today-minutes').textContent=report.minutes||0;document.getElementById('today-points').textContent=report.points||0;}catch(e){console.error('MVP error:',e);}}
+function openExamModal(){document.getElementById('exam-modal').style.display='flex';}
+function closeExamModal(){document.getElementById('exam-modal').style.display='none';document.getElementById('exam-name').value='';document.getElementById('exam-subject').value='';document.getElementById('exam-date').value='';document.getElementById('exam-topics').value='';}
+async function createExam(){const name=document.getElementById('exam-name').value.trim();const subject=document.getElementById('exam-subject').value.trim();const date=document.getElementById('exam-date').value;const topics=document.getElementById('exam-topics').value.split(',').map(t=>t.trim()).filter(t=>t);if(!name||!subject||!date||!topics.length){alert('Fill all fields');return;}try{const res=await fetch('/exam/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exam_name:name,subject,exam_date:date,topics})});const data=await res.json();if(res.ok){appendMsg('assistant',`✅ Exam "${name}" created! ${data.days_left} days left.`);closeExamModal();loadMVPData();}}catch(e){console.error('Create exam error:',e);}}
+document.addEventListener('DOMContentLoaded',loadMVPData);
+setInterval(loadMVPData,5*60*1000);
+</script>
+
 </body>
 </html>

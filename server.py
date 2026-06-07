@@ -1684,3 +1684,507 @@ def get_achievements(request: Request):
 # ════════════════════════════════════════════════════════════════════════════
 # END PHASE 3
 # ════════════════════════════════════════════════════════════════════════════
+# PHASE 4: NOTIFICATIONS + SHARING + VIRAL LOOPS
+# Add these to server.py after Phase 3 endpoints
+
+# ════════════════════════════════════════════════════════════════════════════
+# PHASE 4: DISTRIBUTION & HABIT FORMATION
+# ════════════════════════════════════════════════════════════════════════════
+
+# Add to init_db() - new tables:
+"""
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT,  -- streak_warning, rank_drop, challenge, achievement, friend_activity
+    data JSON,
+    created_at TEXT DEFAULT (datetime('now')),
+    sent_at TEXT,
+    read BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    creator_id INTEGER NOT NULL,
+    challenge_type TEXT,  -- mock_exam_score, streak, hours_studied
+    target_value INTEGER,
+    subject TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT,
+    participants JSON,  -- list of user_ids
+    FOREIGN KEY (creator_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS share_tokens (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    share_type TEXT,  -- leaderboard, score, streak, badge
+    data JSON,
+    created_at TEXT DEFAULT (datetime('now')),
+    expiry TEXT,
+    views INTEGER DEFAULT 0,
+    clicks INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS referrals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    referrer_id INTEGER NOT NULL,
+    referred_id INTEGER,
+    share_token TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    converted BOOLEAN DEFAULT FALSE,
+    converted_at TEXT,
+    reward_given BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (referrer_id) REFERENCES users(id),
+    FOREIGN KEY (referred_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS friend_connections (
+    user_id INTEGER NOT NULL,
+    friend_id INTEGER NOT NULL,
+    connected_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, friend_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (friend_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS friend_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    activity_type TEXT,  -- beat_score, unlocked_badge, started_exam, streak_milestone
+    subject TEXT,
+    value TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+"""
+
+# ── PHASE 4A: NOTIFICATIONS ────────────────────────────────────────────────
+
+@app.post("/notifications/send")
+def send_notification(req: dict, request: Request):
+    """Manually send notification (for testing)"""
+    user = require_user(request)
+    
+    # Only send to own user (in production, admin only)
+    target_user = req.get("target_user_id", user["id"])
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO notifications (user_id, title, message, type, data)
+        VALUES(?,?,?,?,?)
+    """, (target_user, req.get("title", ""), req.get("message", ""), 
+          req.get("type", "alert"), json.dumps(req.get("data", {}))))
+    db.commit()
+    db.close()
+    
+    return {"status": "notification_sent"}
+
+@app.get("/notifications")
+def get_notifications(request: Request):
+    """Get user's unread notifications"""
+    user = require_user(request)
+    
+    db = get_db()
+    notifs = db.execute("""
+        SELECT * FROM notifications 
+        WHERE user_id=? AND read=FALSE
+        ORDER BY created_at DESC LIMIT 20
+    """, (user["id"],)).fetchall()
+    db.close()
+    
+    return {"notifications": [dict(n) for n in notifs]}
+
+@app.post("/notifications/{notif_id}/read")
+def mark_notification_read(notif_id: int, request: Request):
+    """Mark notification as read"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute(
+        "UPDATE notifications SET read=TRUE WHERE id=? AND user_id=?",
+        (notif_id, user["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "marked_read"}
+
+@app.post("/notifications/trigger-streak-warning")
+def trigger_streak_warning(request: Request):
+    """Manually trigger evening streak warning (normally automated)"""
+    user = require_user(request)
+    
+    db = get_db()
+    streak = db.execute(
+        "SELECT current_streak FROM streaks WHERE user_id=?", (user["id"],)
+    ).fetchone()
+    
+    if streak and streak["current_streak"] > 2:
+        db.execute("""
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES(?,?,?,?)
+        """, (user["id"], 
+              f"🔥 Your {streak['current_streak']}-day streak ends at midnight!",
+              f"Study for just 10 minutes to keep your streak alive.",
+              "streak_warning"))
+    
+    db.commit()
+    db.close()
+    
+    return {"status": "notification_sent"}
+
+@app.post("/notifications/trigger-rank-drop")
+def trigger_rank_drop_notification(request: Request):
+    """Notify if user dropped in rankings"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Get current rank (simplified)
+    all_users = db.execute("""
+        SELECT u.id, COUNT(qa.id) as quiz_count FROM users u
+        LEFT JOIN quiz_attempts qa ON u.id = qa.user_id
+        GROUP BY u.id ORDER BY quiz_count DESC
+    """).fetchall()
+    
+    current_rank = next((i+1 for i, u in enumerate(all_users) if u["id"] == user["id"]), None)
+    
+    if current_rank and current_rank > 10:
+        db.execute("""
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES(?,?,?,?)
+        """, (user["id"],
+              f"📉 You dropped to rank #{current_rank}",
+              f"Other students are studying more. Push to get back in top 10!",
+              "rank_drop"))
+    
+    db.commit()
+    db.close()
+    
+    return {"status": "checked"}
+
+# ── PHASE 4B: SHARING & VIRALITY ────────────────────────────────────────
+
+@app.post("/share/create-link")
+def create_share_link(req: dict, request: Request):
+    """Create shareable link for leaderboard rank, score, or achievement"""
+    user = require_user(request)
+    share_type = req.get("type", "leaderboard")  # leaderboard, score, streak, badge
+    
+    token = secrets.token_urlsafe(16)
+    data = {
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "type": share_type,
+        "value": req.get("value", ""),
+        "created_at": datetime.now().isoformat()
+    }
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO share_tokens (token, user_id, share_type, data, expiry)
+        VALUES(?,?,?,?,?)
+    """, (token, user["id"], share_type, json.dumps(data),
+          (datetime.now() + timedelta(days=30)).isoformat()))
+    db.commit()
+    db.close()
+    
+    share_url = f"https://chotu-lcc7.onrender.com/share/{token}"
+    
+    # Generate share messages
+    messages = {
+        "leaderboard": f"🏆 I'm on the Chotu leaderboard! Can you beat my rank? {share_url}",
+        "score": f"📝 I just scored {req.get('value', '0')}/100 on a mock exam! Think you can do better? {share_url}",
+        "streak": f"🔥 I have a {req.get('value', '0')}-day study streak! Join me and build yours. {share_url}",
+        "badge": f"🏅 I unlocked a badge on Chotu! See my achievement {share_url}"
+    }
+    
+    return {
+        "share_url": share_url,
+        "share_message": messages.get(share_type, "Check me out on Chotu!"),
+        "token": token
+    }
+
+@app.get("/share/{token}")
+def view_shared_content(token: str):
+    """View shared content (public, no auth)"""
+    db = get_db()
+    
+    share = db.execute(
+        "SELECT * FROM share_tokens WHERE token=?", (token,)
+    ).fetchone()
+    
+    if not share:
+        return {"error": "Link not found or expired"}
+    
+    # Increment view count
+    db.execute("UPDATE share_tokens SET views=views+1 WHERE token=?", (token,))
+    db.commit()
+    
+    data = json.loads(share["data"])
+    
+    return {
+        "user_name": data.get("user_name"),
+        "type": share["share_type"],
+        "value": data.get("value"),
+        "message": f"{data.get('user_name')} is crushing it on Chotu!",
+        "cta": "Join Chotu and study smarter →"
+    }
+
+# ── PHASE 4C: CHALLENGES & COMPETITION ────────────────────────────────────
+
+@app.post("/challenges/create")
+def create_challenge(req: dict, request: Request):
+    """Create a challenge for friends"""
+    user = require_user(request)
+    
+    challenge_type = req.get("type", "mock_exam_score")  # mock_exam_score, streak, hours_studied
+    target = req.get("target_value", 75)
+    subject = req.get("subject", "")
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO challenges (creator_id, challenge_type, target_value, subject, expires_at, participants)
+        VALUES(?,?,?,?,?,?)
+    """, (user["id"], challenge_type, target, subject,
+          (datetime.now() + timedelta(days=7)).isoformat(),
+          json.dumps([user["id"]])))
+    db.commit()
+    
+    challenge = db.execute(
+        "SELECT id FROM challenges WHERE creator_id=? ORDER BY id DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    
+    db.close()
+    
+    challenge_id = challenge["id"]
+    challenge_url = f"https://chotu-lcc7.onrender.com/?challenge={challenge_id}"
+    
+    messages = {
+        "mock_exam_score": f"🎯 I challenge you to score {target}/100 on {subject} mock exam! {challenge_url}",
+        "streak": f"🔥 Can you beat my {target}-day study streak? {challenge_url}",
+        "hours_studied": f"⏱️ I'm studying {target} hours this week. Join the challenge! {challenge_url}"
+    }
+    
+    return {
+        "challenge_id": challenge_id,
+        "challenge_url": challenge_url,
+        "share_message": messages.get(challenge_type)
+    }
+
+@app.post("/challenges/{challenge_id}/join")
+def join_challenge(challenge_id: int, request: Request):
+    """Join an existing challenge"""
+    user = require_user(request)
+    
+    db = get_db()
+    challenge = db.execute(
+        "SELECT * FROM challenges WHERE id=?", (challenge_id,)
+    ).fetchone()
+    
+    if not challenge:
+        raise HTTPException(status_code=404)
+    
+    participants = json.loads(challenge["participants"] or "[]")
+    if user["id"] not in participants:
+        participants.append(user["id"])
+        db.execute(
+            "UPDATE challenges SET participants=? WHERE id=?",
+            (json.dumps(participants), challenge_id)
+        )
+        db.commit()
+    
+    db.close()
+    
+    return {"status": "joined", "challenge_id": challenge_id}
+
+@app.get("/challenges/{challenge_id}")
+def get_challenge_progress(challenge_id: int, request: Request):
+    """Get progress on a challenge"""
+    user = require_user(request)
+    
+    db = get_db()
+    challenge = db.execute(
+        "SELECT * FROM challenges WHERE id=?", (challenge_id,)
+    ).fetchone()
+    
+    if not challenge:
+        raise HTTPException(status_code=404)
+    
+    participants = json.loads(challenge["participants"])
+    
+    # Calculate progress for each participant
+    progress = {}
+    for pid in participants:
+        p_user = db.execute("SELECT name FROM users WHERE id=?", (pid,)).fetchone()
+        
+        if challenge["challenge_type"] == "mock_exam_score":
+            latest_mock = db.execute("""
+                SELECT score FROM mock_exams 
+                WHERE user_id=? AND subject=?
+                ORDER BY created_at DESC LIMIT 1
+            """, (pid, challenge["subject"])).fetchone()
+            score = latest_mock["score"] if latest_mock else 0
+            progress[pid] = {
+                "name": p_user["name"] if p_user else "Unknown",
+                "score": score,
+                "target": challenge["target_value"],
+                "completed": score >= challenge["target_value"]
+            }
+        elif challenge["challenge_type"] == "streak":
+            streak = db.execute(
+                "SELECT current_streak FROM streaks WHERE user_id=?", (pid,)
+            ).fetchone()
+            current = streak["current_streak"] if streak else 0
+            progress[pid] = {
+                "name": p_user["name"] if p_user else "Unknown",
+                "streak": current,
+                "target": challenge["target_value"],
+                "completed": current >= challenge["target_value"]
+            }
+    
+    db.close()
+    
+    return {
+        "challenge_type": challenge["challenge_type"],
+        "target": challenge["target_value"],
+        "participants": progress,
+        "expires_at": challenge["expires_at"]
+    }
+
+# ── PHASE 4D: FRIEND ACTIVITY & SOCIAL FEED ────────────────────────────────
+
+@app.post("/friends/connect")
+def connect_friend(req: dict, request: Request):
+    """Connect with another user (friend request)"""
+    user = require_user(request)
+    friend_email = req.get("friend_email", "")
+    
+    db = get_db()
+    friend = db.execute(
+        "SELECT id FROM users WHERE email=?", (friend_email,)
+    ).fetchone()
+    
+    if not friend:
+        return {"error": "Friend not found"}
+    
+    db.execute(
+        "INSERT OR IGNORE INTO friend_connections (user_id, friend_id) VALUES(?,?)",
+        (user["id"], friend["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "friend_connected"}
+
+@app.get("/friends/activity")
+def get_friend_activity(request: Request):
+    """Get activity from friends"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Get friend IDs
+    friends = db.execute(
+        "SELECT friend_id FROM friend_connections WHERE user_id=?",
+        (user["id"],)
+    ).fetchall()
+    
+    friend_ids = [f["friend_id"] for f in friends]
+    
+    if not friend_ids:
+        return {"activity": []}
+    
+    # Get recent activity from friends
+    placeholders = ",".join(["?"] * len(friend_ids))
+    activity = db.execute(f"""
+        SELECT * FROM friend_activity 
+        WHERE user_id IN ({placeholders})
+        ORDER BY created_at DESC LIMIT 10
+    """, friend_ids).fetchall()
+    
+    db.close()
+    
+    return {"activity": [dict(a) for a in activity]}
+
+@app.post("/activity/log")
+def log_user_activity(req: dict, request: Request):
+    """Log user activity for friends to see"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO friend_activity (user_id, activity_type, subject, value)
+        VALUES(?,?,?,?)
+    """, (user["id"], req.get("type", ""), req.get("subject", ""), 
+          req.get("value", "")))
+    db.commit()
+    db.close()
+    
+    return {"status": "activity_logged"}
+
+# ── PHASE 4E: REFERRAL SYSTEM (Viral Growth) ────────────────────────────
+
+@app.get("/referral/link")
+def get_referral_link(request: Request):
+    """Get user's referral link"""
+    user = require_user(request)
+    
+    token = secrets.token_urlsafe(12)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO referrals (referrer_id, share_token)
+        VALUES(?,?)
+    """, (user["id"], token))
+    db.commit()
+    db.close()
+    
+    referral_url = f"https://chotu-lcc7.onrender.com/?ref={token}"
+    
+    return {
+        "referral_url": referral_url,
+        "share_message": f"🎓 I'm using Chotu to study smarter. Free AI tutor that actually helps. {referral_url}",
+        "reward": "Unlock premium features when friends join"
+    }
+
+@app.post("/referral/claim")
+def claim_referral_reward(req: dict, request: Request):
+    """Claim reward for successful referral"""
+    user = require_user(request)
+    ref_token = req.get("referral_token", "")
+    
+    db = get_db()
+    referral = db.execute(
+        "SELECT referrer_id FROM referrals WHERE share_token=?",
+        (ref_token,)
+    ).fetchone()
+    
+    if not referral:
+        return {"error": "Invalid referral link"}
+    
+    # Mark as converted
+    db.execute("""
+        UPDATE referrals SET referred_id=?, converted=TRUE, converted_at=datetime('now')
+        WHERE share_token=?
+    """, (user["id"], ref_token))
+    
+    # Give reward to referrer (e.g., 100 points)
+    db.execute("""
+        UPDATE leaderboard SET total_points=total_points+100 WHERE user_id=?
+    """, (referral["referrer_id"],))
+    
+    db.commit()
+    db.close()
+    
+    return {"status": "reward_claimed", "message": "Referrer earned 100 points!"}
+
+# ════════════════════════════════════════════════════════════════════════════
+# END PHASE 4
+# ════════════════════════════════════════════════════════════════════════════

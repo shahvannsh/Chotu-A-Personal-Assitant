@@ -682,6 +682,82 @@ Insert these sections into index.html sidebar, after the EXAMS section -->
 </div>
 
 
+
+<!-- PHASE 3 UI ADDITIONS
+Insert into index.html sidebar -->
+
+<!-- DAILY GOAL WIDGET -->
+<div style="margin-bottom:12px;">
+  <div class="section-label">🎯 TODAY'S GOAL</div>
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);" id="goal-status">0/60 min</span>
+      <span style="font-family:var(--mono);font-size:9px;color:var(--accent);" id="goal-percent">0%</span>
+    </div>
+    <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;">
+      <div id="goal-bar" style="height:100%;width:0%;background:var(--accent);transition:width .3s;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD PREVIEW -->
+<div style="margin-bottom:12px;">
+  <div class="section-label">🏆 LEADERBOARD</div>
+  <button onclick="openLeaderboardModal()" style="font-family:var(--mono);font-size:9px;padding:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:3px;width:100%;letter-spacing:1px;">
+    see rankings
+  </button>
+  <div id="leaderboard-preview" style="margin-top:4px;font-family:var(--mono);font-size:8px;color:var(--text-dim);text-align:center;">
+    loading...
+  </div>
+</div>
+
+<!-- DAILY RECOMMENDATIONS -->
+<div style="margin-bottom:12px;">
+  <div class="section-label">💡 TODAY'S PLAN</div>
+  <button onclick="generateRecommendations()" style="font-family:var(--mono);font-size:9px;padding:6px;border:1px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:3px;width:100%;letter-spacing:1px;">
+    generate
+  </button>
+</div>
+
+<!-- BADGES -->
+<div style="margin-bottom:12px;">
+  <div class="section-label">🏅 BADGES</div>
+  <div id="badges-list" style="display:flex;flex-wrap:wrap;gap:4px;">
+    <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);width:100%;text-align:center;">none yet</span>
+  </div>
+</div>
+
+<!-- LEADERBOARD MODAL -->
+<div id="leaderboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(4px);z-index:200;overflow-y:auto;">
+  <div style="max-width:600px;margin:20px auto;background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:2px;margin:0;">🏆 LEADERBOARD</h2>
+      <button onclick="closeLeaderboardModal()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;">×</button>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+      <button onclick="switchLeaderboardTab('global')" id="tab-global" style="font-family:var(--mono);font-size:9px;padding:6px 10px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);border-radius:3px;margin-right:4px;cursor:pointer;">ALL TIME</button>
+      <button onclick="switchLeaderboardTab('weekly')" id="tab-weekly" style="font-family:var(--mono);font-size:9px;padding:6px 10px;border:1px solid var(--border-hi);background:transparent;color:var(--text-dim);border-radius:3px;cursor:pointer;">THIS WEEK</button>
+    </div>
+    
+    <div id="leaderboard-content" style="display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto;">
+      loading...
+    </div>
+  </div>
+</div>
+
+<!-- RECOMMENDATIONS MODAL -->
+<div id="recommendations-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:2px;margin-bottom:12px;">💡 TODAY'S STUDY PLAN</h2>
+    <div id="recommendations-content" style="font-family:var(--mono);font-size:10px;color:var(--text-hi);line-height:1.8;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px;">
+      generating...
+    </div>
+    <button onclick="closeRecommendationsModal()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">UNDERSTAND</button>
+  </div>
+</div>
+
+
     </div>
   </aside>
 
@@ -1850,6 +1926,117 @@ async function loadPhase2Data(){
 }
 
 document.addEventListener('DOMContentLoaded',loadPhase2Data);
+</script>
+
+
+
+<script>
+// PHASE 3 FUNCTIONS
+
+// Daily Goals
+async function loadDailyGoal(){
+  try{
+    const res=await fetch('/daily-goal/today').then(r=>r.json());
+    const bar=document.getElementById('goal-bar');
+    const status=document.getElementById('goal-status');
+    const percent=document.getElementById('goal-percent');
+    
+    status.textContent=`${res.completed_minutes}/${res.goal_minutes} min`;
+    percent.textContent=`${res.progress_percent}%`;
+    bar.style.width=`${Math.min(100,res.progress_percent)}%`;
+    
+    if(res.completed) bar.style.background='var(--green)';
+  }catch(e){console.error('Goal error:',e);}
+}
+
+// Leaderboard
+function openLeaderboardModal(){
+  document.getElementById('leaderboard-modal').style.display='block';
+  loadLeaderboard('global');
+}
+function closeLeaderboardModal(){document.getElementById('leaderboard-modal').style.display='none';}
+
+async function switchLeaderboardTab(tab){
+  document.getElementById('tab-global').style.background=tab==='global'?'var(--accent)':'transparent';
+  document.getElementById('tab-global').style.color=tab==='global'?'var(--bg)':'var(--text-dim)';
+  document.getElementById('tab-global').style.borderColor=tab==='global'?'var(--accent)':'var(--border-hi)';
+  
+  document.getElementById('tab-weekly').style.background=tab==='weekly'?'var(--accent)':'transparent';
+  document.getElementById('tab-weekly').style.color=tab==='weekly'?'var(--bg)':'var(--text-dim)';
+  document.getElementById('tab-weekly').style.borderColor=tab==='weekly'?'var(--accent)':'var(--border-hi)';
+  
+  loadLeaderboard(tab);
+}
+
+async function loadLeaderboard(type){
+  try{
+    const endpoint=type==='global'?'/leaderboard/global':'/leaderboard/weekly';
+    const res=await fetch(endpoint).then(r=>r.json());
+    
+    const content=document.getElementById('leaderboard-content');
+    const lb=res.leaderboard.slice(0,20);
+    
+    content.innerHTML=lb.map((entry,i)=>`
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:8px;flex:1;">
+          <span style="font-size:14px;">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--accent);">${entry.name}</span>
+        </div>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);">${entry.points} pts</span>
+      </div>
+    `).join('');
+    
+    if(res.user_rank){
+      content.innerHTML+=`<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px;background:var(--focus-btn-bg);border-radius:4px;padding:8px;">
+        <strong style="font-family:var(--mono);font-size:10px;">Your Rank: #${res.user_rank.rank} (${res.user_rank.points} pts)</strong>
+      </div>`;
+    }
+  }catch(e){console.error('Leaderboard error:',e);}
+}
+
+// Recommendations
+function openRecommendationsModal(){
+  document.getElementById('recommendations-modal').style.display='flex';
+  loadRecommendations();
+}
+function closeRecommendationsModal(){document.getElementById('recommendations-modal').style.display='none';}
+
+async function generateRecommendations(){
+  try{
+    const res=await fetch('/recommendations/generate',{method:'POST',body:'{}'}).then(r=>r.json());
+    document.getElementById('recommendations-content').textContent=res.recommendations;
+    openRecommendationsModal();
+  }catch(e){console.error('Generation error:',e);}
+}
+
+async function loadRecommendations(){
+  try{
+    const res=await fetch('/recommendations/today').then(r=>r.json());
+    document.getElementById('recommendations-content').textContent=res.recommendations||'Generate daily plan first';
+  }catch(e){console.error('Load rec error:',e);}
+}
+
+// Badges
+async function loadBadges(){
+  try{
+    const res=await fetch('/badges').then(r=>r.json());
+    const list=document.getElementById('badges-list');
+    if(!res.badges || res.badges.length===0){
+      list.innerHTML='<span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);width:100%;text-align:center;">none yet - keep studying!</span>';
+      return;
+    }
+    list.innerHTML=res.badges.map(b=>`<span title="${b.badge_name}" style="font-size:18px;cursor:help;">${b.badge_icon}</span>`).join('');
+  }catch(e){console.error('Badge error:',e);}
+}
+
+// Load all Phase 3 data periodically
+async function loadPhase3Data(){
+  loadDailyGoal();
+  loadBadges();
+  loadLeaderboard('global');
+}
+
+document.addEventListener('DOMContentLoaded',()=>{loadPhase3Data();setInterval(loadPhase3Data,5*60*1000);});
 </script>
 
 

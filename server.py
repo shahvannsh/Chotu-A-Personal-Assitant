@@ -1157,3 +1157,530 @@ def get_next_topic(request: Request):
 # ════════════════════════════════════════════════════════════════════════════
 # END PHASE 2 ADDITIONS
 # ════════════════════════════════════════════════════════════════════════════
+
+
+# PHASE 3: HABIT LOOP + SOCIAL + AI PERSONALIZATION
+# Add these to server.py after Phase 2 endpoints
+
+# ════════════════════════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════════════════════════
+
+# Add to init_db() - new tables:
+"""
+CREATE TABLE IF NOT EXISTS user_habits (
+    user_id INTEGER PRIMARY KEY,
+    study_goal_minutes INTEGER DEFAULT 60,
+    notification_time TEXT DEFAULT '20:59',
+    last_notification_sent TEXT,
+    notifications_enabled BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS daily_goals (
+    user_id INTEGER,
+    goal_date TEXT,
+    goal_minutes INTEGER,
+    completed_minutes INTEGER DEFAULT 0,
+    completed BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY (user_id, goal_date),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    badge_name TEXT NOT NULL,
+    badge_icon TEXT,
+    earned_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, badge_name)
+);
+
+CREATE TABLE IF NOT EXISTS leaderboard (
+    user_id INTEGER PRIMARY KEY,
+    username TEXT,
+    picture TEXT,
+    total_points INTEGER DEFAULT 0,
+    current_streak INTEGER DEFAULT 0,
+    mock_exams_completed INTEGER DEFAULT 0,
+    avg_score FLOAT DEFAULT 0,
+    rank INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS daily_recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    recommendation_date TEXT,
+    subject TEXT,
+    topic TEXT,
+    reason TEXT,
+    priority INTEGER,
+    completed BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, recommendation_date, topic)
+);
+"""
+
+# ── PHASE 3A: HABIT LOOP & NOTIFICATIONS ────────────────────────────────────
+
+@app.get("/habits/settings")
+def get_habit_settings(request: Request):
+    """Get user's habit settings"""
+    user = require_user(request)
+    db = get_db()
+    row = db.execute("SELECT * FROM user_habits WHERE user_id=?", (user["id"],)).fetchone()
+    db.close()
+    
+    if not row:
+        return {"study_goal_minutes": 60, "notification_time": "20:59", "notifications_enabled": True}
+    
+    return dict(row)
+
+@app.post("/habits/settings")
+def update_habit_settings(req: dict, request: Request):
+    """Update user's habit settings"""
+    user = require_user(request)
+    goal = req.get("study_goal_minutes", 60)
+    notif_time = req.get("notification_time", "20:59")
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO user_habits (user_id, study_goal_minutes, notification_time)
+        VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+        study_goal_minutes=excluded.study_goal_minutes,
+        notification_time=excluded.notification_time
+    """, (user["id"], goal, notif_time))
+    db.commit()
+    db.close()
+    
+    return {"status": "settings_updated"}
+
+@app.get("/daily-goal/today")
+def get_today_goal(request: Request):
+    """Get today's goal progress"""
+    user = require_user(request)
+    today = date.today().isoformat()
+    
+    db = get_db()
+    
+    # Get or create goal
+    goal = db.execute(
+        "SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?",
+        (user["id"], today)
+    ).fetchone()
+    
+    if not goal:
+        # Create goal from habits
+        habits = db.execute(
+            "SELECT study_goal_minutes FROM user_habits WHERE user_id=?",
+            (user["id"],)
+        ).fetchone()
+        goal_mins = habits["study_goal_minutes"] if habits else 60
+        
+        db.execute(
+            "INSERT INTO daily_goals (user_id, goal_date, goal_minutes) VALUES(?,?,?)",
+            (user["id"], today, goal_mins)
+        )
+        db.commit()
+        goal = db.execute(
+            "SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?",
+            (user["id"], today)
+        ).fetchone()
+    
+    db.close()
+    
+    return {
+        "goal_minutes": goal["goal_minutes"],
+        "completed_minutes": goal["completed_minutes"],
+        "completed": goal["completed"],
+        "progress_percent": int((goal["completed_minutes"] / max(1, goal["goal_minutes"])) * 100)
+    }
+
+@app.post("/daily-goal/update")
+def update_goal_progress(req: dict, request: Request):
+    """Update progress on today's goal"""
+    user = require_user(request)
+    minutes = req.get("minutes", 0)
+    today = date.today().isoformat()
+    
+    db = get_db()
+    
+    goal = db.execute(
+        "SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?",
+        (user["id"], today)
+    ).fetchone()
+    
+    if not goal:
+        return {"status": "no_goal"}
+    
+    new_completed = goal["completed_minutes"] + minutes
+    is_completed = new_completed >= goal["goal_minutes"]
+    
+    db.execute(
+        "UPDATE daily_goals SET completed_minutes=?, completed=? WHERE user_id=? AND goal_date=?",
+        (new_completed, is_completed, user["id"], today)
+    )
+    
+    # Award badge if goal completed
+    if is_completed and not goal["completed"]:
+        award_badge(user["id"], "daily_goal", "⭐ Daily Goal", db)
+    
+    db.commit()
+    db.close()
+    
+    return {
+        "completed_minutes": new_completed,
+        "goal_completed": is_completed,
+        "progress_percent": int((new_completed / max(1, goal["goal_minutes"])) * 100)
+    }
+
+@app.get("/reminders/should-notify")
+def should_send_notification(request: Request):
+    """Check if it's time to send evening notification"""
+    user = require_user(request)
+    
+    db = get_db()
+    habits = db.execute(
+        "SELECT * FROM user_habits WHERE user_id=?", (user["id"],)
+    ).fetchone()
+    db.close()
+    
+    if not habits or not habits["notifications_enabled"]:
+        return {"should_notify": False}
+    
+    # Check if notification already sent today
+    if habits["last_notification_sent"] == date.today().isoformat():
+        return {"should_notify": False}
+    
+    # Check current time vs notification_time
+    now = datetime.now().time()
+    notif_hour, notif_min = map(int, habits["notification_time"].split(':'))
+    notif_time = datetime.min.time().replace(hour=notif_hour, minute=notif_min)
+    
+    return {"should_notify": now >= notif_time}
+
+@app.post("/reminders/mark-sent")
+def mark_notification_sent(request: Request):
+    """Mark notification as sent for today"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute(
+        "UPDATE user_habits SET last_notification_sent=? WHERE user_id=?",
+        (date.today().isoformat(), user["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "notification_marked"}
+
+# ── PHASE 3B: SOCIAL LEADERBOARD ────────────────────────────────────────────
+
+@app.get("/leaderboard/global")
+def get_global_leaderboard(request: Request):
+    """Get top 50 students by points"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Calculate points for all active users
+    users = db.execute("SELECT id, name, picture FROM users LIMIT 100").fetchall()
+    
+    leaderboard_data = []
+    for u in users:
+        # Points = streak days + quiz attempts + mock exams
+        streak = db.execute(
+            "SELECT current_streak FROM streaks WHERE user_id=?", (u["id"],)
+        ).fetchone()
+        
+        quizzes = db.execute(
+            "SELECT COUNT(*) as count FROM quiz_attempts WHERE user_id=?",
+            (u["id"],)
+        ).fetchone()
+        
+        mocks = db.execute(
+            "SELECT AVG(score) as avg_score FROM mock_exams WHERE user_id=?",
+            (u["id"],)
+        ).fetchone()
+        
+        points = (streak["current_streak"] if streak else 0) * 10 + (quizzes["count"] if quizzes else 0) * 2
+        avg_score = mocks["avg_score"] if mocks and mocks["avg_score"] else 0
+        
+        leaderboard_data.append({
+            "user_id": u["id"],
+            "name": u["name"],
+            "picture": u["picture"],
+            "points": points,
+            "streak": streak["current_streak"] if streak else 0,
+            "avg_score": float(avg_score)
+        })
+    
+    # Sort by points
+    leaderboard_data.sort(key=lambda x: x["points"], reverse=True)
+    
+    # Add rank
+    for i, entry in enumerate(leaderboard_data[:50], 1):
+        entry["rank"] = i
+    
+    db.close()
+    
+    # Highlight current user's rank
+    user_rank = next((e for e in leaderboard_data if e["user_id"] == user["id"]), None)
+    
+    return {
+        "leaderboard": leaderboard_data[:50],
+        "user_rank": user_rank
+    }
+
+@app.get("/leaderboard/weekly")
+def get_weekly_leaderboard(request: Request):
+    """Get top students by this week's activity"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    week_start = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+    
+    users = db.execute("SELECT id, name, picture FROM users LIMIT 100").fetchall()
+    
+    weekly_data = []
+    for u in users:
+        # Minutes studied this week
+        logs = db.execute("""
+            SELECT SUM(minutes_studied) as total FROM daily_study_log
+            WHERE user_id=? AND study_date >= ?
+        """, (u["id"], week_start)).fetchone()
+        
+        # Quizzes this week
+        quizzes = db.execute("""
+            SELECT COUNT(*) as count FROM quiz_attempts
+            WHERE user_id=? AND DATE(attempted_at) >= ?
+        """, (u["id"], week_start)).fetchone()
+        
+        minutes = logs["total"] if logs and logs["total"] else 0
+        quiz_count = quizzes["count"] if quizzes else 0
+        
+        weekly_data.append({
+            "user_id": u["id"],
+            "name": u["name"],
+            "picture": u["picture"],
+            "minutes_studied": minutes,
+            "quizzes": quiz_count,
+            "score": (minutes * 1) + (quiz_count * 5)  # Points formula
+        })
+    
+    weekly_data.sort(key=lambda x: x["score"], reverse=True)
+    
+    for i, entry in enumerate(weekly_data[:50], 1):
+        entry["rank"] = i
+    
+    db.close()
+    
+    user_rank = next((e for e in weekly_data if e["user_id"] == user["id"]), None)
+    
+    return {
+        "leaderboard": weekly_data[:50],
+        "user_rank": user_rank,
+        "week_start": week_start
+    }
+
+@app.post("/leaderboard/share-score")
+def share_mock_score(req: dict, request: Request):
+    """Share mock exam score (for social pressure)"""
+    user = require_user(request)
+    score = req.get("score", 0)
+    subject = req.get("subject", "")
+    
+    # This just returns shareable message
+    return {
+        "share_text": f"🎯 I scored {score}/100 on {subject} mock exam! Can you beat my score? #ChotuStudyOS",
+        "share_url": f"https://chotu-lcc7.onrender.com/?challenge={score}&subject={subject}"
+    }
+
+# ── PHASE 3C: AI PERSONALIZATION & DAILY RECOMMENDATIONS ──────────────────
+
+@app.post("/recommendations/generate")
+def generate_daily_recommendations(req: dict, request: Request):
+    """AI generates personalized daily study recommendations"""
+    user = require_user(request)
+    gcl = get_groq(user)
+    
+    db = get_db()
+    
+    # Get user's weak topics
+    weak = db.execute("""
+        SELECT subject, topic, confidence FROM weak_topics
+        WHERE user_id=? AND confidence < 70
+        ORDER BY confidence ASC LIMIT 5
+    """, (user["id"],)).fetchall()
+    
+    # Get recent quiz performance
+    quizzes = db.execute("""
+        SELECT topic, AVG(CASE WHEN is_correct THEN 100 ELSE 0 END) as avg_score
+        FROM quiz_attempts
+        WHERE user_id=? AND DATE(attempted_at) >= DATE('now', '-7 days')
+        GROUP BY topic
+        ORDER BY avg_score ASC LIMIT 5
+    """, (user["id"],)).fetchall()
+    
+    db.close()
+    
+    weak_list = [f"{t['topic']} ({t['confidence']}% confidence)" for t in weak]
+    quiz_list = [f"{q['topic']} ({int(q['avg_score'])}% avg score)" for q in quizzes]
+    
+    prompt = f"""User {user.get('name', 'Student')} needs daily study recommendations.
+
+Weak areas: {', '.join(weak_list) if weak_list else 'None yet'}
+Low-scoring topics: {', '.join(quiz_list) if quiz_list else 'None yet'}
+
+Generate 3 SPECIFIC study recommendations for TODAY:
+1. Most urgent (fix weakness immediately)
+2. Build momentum (leverage strength)
+3. Learn something new (expand knowledge)
+
+Format: 
+1. [Topic] - [Why it matters] (15-20 min)
+2. [Topic] - [Why it matters] (15-20 min)
+3. [Topic] - [Why it matters] (15-20 min)
+
+Be concise and motivating. No fluff."""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=300
+        )
+        
+        recommendations = resp.choices[0].message.content
+        
+        # Store in DB
+        db = get_db()
+        today = date.today().isoformat()
+        
+        db.execute(
+            "DELETE FROM daily_recommendations WHERE user_id=? AND recommendation_date=?",
+            (user["id"], today)
+        )
+        
+        db.execute("""
+            INSERT INTO daily_recommendations 
+            (user_id, recommendation_date, subject, topic, reason, priority)
+            VALUES(?,?,?,?,?,?)
+        """, (user["id"], today, "Daily", "Personalized Plan", recommendations, 1))
+        
+        db.commit()
+        db.close()
+        
+        return {"recommendations": recommendations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recommendations/today")
+def get_today_recommendations(request: Request):
+    """Get today's AI-generated recommendations"""
+    user = require_user(request)
+    today = date.today().isoformat()
+    
+    db = get_db()
+    rec = db.execute(
+        "SELECT * FROM daily_recommendations WHERE user_id=? AND recommendation_date=?",
+        (user["id"], today)
+    ).fetchone()
+    db.close()
+    
+    if not rec:
+        return {"recommendations": None, "message": "Run generation first"}
+    
+    return {
+        "recommendations": rec["reason"],
+        "priority": rec["priority"],
+        "completed": rec["completed"]
+    }
+
+# ── BADGES & ACHIEVEMENTS ────────────────────────────────────────────────
+
+def award_badge(user_id: int, badge_id: str, badge_name: str, db=None):
+    """Award badge to user"""
+    should_close = False
+    if db is None:
+        db = get_db()
+        should_close = True
+    
+    try:
+        db.execute(
+            "INSERT INTO user_badges (user_id, badge_name, badge_icon) VALUES(?,?,?)",
+            (user_id, badge_name, "🏆")
+        )
+        db.commit()
+    except:
+        # Badge already exists
+        pass
+    finally:
+        if should_close:
+            db.close()
+
+@app.get("/badges")
+def get_user_badges(request: Request):
+    """Get all badges earned by user"""
+    user = require_user(request)
+    
+    db = get_db()
+    badges = db.execute(
+        "SELECT * FROM user_badges WHERE user_id=? ORDER BY earned_at DESC",
+        (user["id"],)
+    ).fetchall()
+    db.close()
+    
+    return {"badges": [dict(b) for b in badges]}
+
+@app.get("/achievements")
+def get_achievements(request: Request):
+    """Get achievement progress"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Calculate various achievement metrics
+    streak = db.execute(
+        "SELECT current_streak, longest_streak FROM streaks WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    quizzes = db.execute(
+        "SELECT COUNT(*) as count, AVG(CAST(is_correct AS FLOAT))*100 as avg_score FROM quiz_attempts WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    mocks = db.execute(
+        "SELECT COUNT(*) as count FROM mock_exams WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    db.close()
+    
+    achievements = {
+        "streaks": {
+            "current": streak["current_streak"] if streak else 0,
+            "longest": streak["longest_streak"] if streak else 0,
+            "milestones": [7, 14, 30, 60, 100]
+        },
+        "quizzes": {
+            "attempted": quizzes["count"] if quizzes else 0,
+            "accuracy": round(quizzes["avg_score"] if quizzes and quizzes["avg_score"] else 0, 1),
+            "milestones": [10, 50, 100, 250]
+        },
+        "mocks": {
+            "completed": mocks["count"] if mocks else 0,
+            "milestones": [1, 5, 10]
+        }
+    }
+    
+    return achievements
+
+# ════════════════════════════════════════════════════════════════════════════
+# END PHASE 3
+# ════════════════════════════════════════════════════════════════════════════

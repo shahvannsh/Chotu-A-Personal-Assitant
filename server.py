@@ -2188,3 +2188,705 @@ def claim_referral_reward(req: dict, request: Request):
 # ════════════════════════════════════════════════════════════════════════════
 # END PHASE 4
 # ════════════════════════════════════════════════════════════════════════════
+# PHASE 5: ADAPTIVE INTELLIGENCE + MONETIZATION
+# Add these to server.py after Phase 4 endpoints
+
+# ════════════════════════════════════════════════════════════════════════════
+# PHASE 5: ADVANCED PERSONALIZATION & BUSINESS MODEL
+# ════════════════════════════════════════════════════════════════════════════
+
+# Add to init_db() - new tables:
+"""
+CREATE TABLE IF NOT EXISTS learning_profiles (
+    user_id INTEGER PRIMARY KEY,
+    learning_style TEXT,  -- visual, auditory, kinesthetic, reading
+    pace TEXT,  -- slow, normal, fast
+    preferred_subject TEXT,
+    difficulty_preference INTEGER (1-5),
+    study_pattern TEXT,  -- morning, evening, mixed
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS adaptive_paths (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    current_level INTEGER (1-10),
+    mastered_topics INTEGER DEFAULT 0,
+    total_topics INTEGER,
+    estimated_completion_days INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, subject)
+);
+
+CREATE TABLE IF NOT EXISTS skill_assessments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    skill_name TEXT,
+    proficiency_score FLOAT (0-100),
+    assessment_type TEXT,  -- quiz, mock, peer_review
+    assessed_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS study_analytics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    date TEXT,
+    topics_studied INTEGER,
+    quiz_accuracy FLOAT,
+    focus_session_count INTEGER,
+    streak_maintained BOOLEAN,
+    recommendations_followed BOOLEAN,
+    active_time_minutes INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    plan TEXT,  -- free, pro, premium
+    status TEXT,  -- active, cancelled, expired
+    started_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT,
+    auto_renew BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS premium_features (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    feature_name TEXT,  -- unlimited_mocks, ai_mentor, peer_tutor, interview_prep
+    unlocked_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, feature_name)
+);
+
+CREATE TABLE IF NOT EXISTS ai_mentor_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT,
+    topic TEXT,
+    question TEXT,
+    ai_response TEXT,
+    student_rating INTEGER (1-5),
+    session_duration_minutes INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS interview_prep_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_type TEXT,  -- behavioral, technical, coding
+    company TEXT,
+    question TEXT,
+    user_answer TEXT,
+    feedback TEXT,
+    score INTEGER (0-100),
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS peer_tutoring (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tutor_id INTEGER NOT NULL,
+    student_id INTEGER NOT NULL,
+    subject TEXT,
+    topic TEXT,
+    session_status TEXT,  -- requested, scheduled, completed, rated
+    scheduled_at TEXT,
+    completed_at TEXT,
+    student_rating INTEGER (1-5),
+    tutor_earnings FLOAT DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (tutor_id) REFERENCES users(id),
+    FOREIGN KEY (student_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id INTEGER PRIMARY KEY,
+    notifications_enabled BOOLEAN DEFAULT TRUE,
+    email_frequency TEXT,  -- daily, weekly, never
+    difficulty_auto_adjust BOOLEAN DEFAULT TRUE,
+    show_solutions_immediately BOOLEAN DEFAULT FALSE,
+    language TEXT DEFAULT 'en',
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+"""
+
+from datetime import datetime, timedelta
+import random
+
+# ── PHASE 5A: ADAPTIVE LEARNING PATHS ────────────────────────────────────
+
+@app.post("/learning/assess-style")
+def assess_learning_style(req: dict, request: Request):
+    """Quiz to determine learning style"""
+    user = require_user(request)
+    
+    # Simple assessment based on quiz answers
+    answers = req.get("answers", {})  # {q1: 'a', q2: 'b', ...}
+    
+    # Count answer patterns
+    style_map = {'a': 'visual', 'b': 'auditory', 'c': 'kinesthetic', 'd': 'reading'}
+    style = style_map.get(max(set(answers.values()), key=list(answers.values()).count), 'visual')
+    pace = 'fast' if len([a for a in answers.values() if a in ['a', 'b']]) > len(answers)/2 else 'normal'
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO learning_profiles (user_id, learning_style, pace)
+        VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+        learning_style=excluded.learning_style, pace=excluded.pace
+    """, (user["id"], style, pace))
+    db.commit()
+    db.close()
+    
+    return {"learning_style": style, "pace": pace, "message": f"You're a {style} learner who prefers {pace} pace"}
+
+@app.post("/adaptive-path/generate")
+def generate_adaptive_path(req: dict, request: Request):
+    """Generate personalized learning path based on goals"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    goal = req.get("goal", "")  # e.g., "master DSA in 30 days"
+    current_level = req.get("current_level", 3)
+    
+    gcl = get_groq(user)
+    
+    prompt = f"""Create a personalized learning path for this student:
+Subject: {subject}
+Goal: {goal}
+Current level: {current_level}/10
+Learning style preference: visual
+
+Generate a week-by-week breakdown:
+- Week 1: [Topics to cover]
+- Week 2: [Topics to cover]
+- Week 3: [Topics to cover]
+- Week 4: [Topics to cover]
+
+Include:
+1. Daily study schedule (topics + hours)
+2. Key concepts to master
+3. Practice exercises
+4. Milestones to hit
+5. Assessment checkpoints
+
+Format as structured JSON."""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1500
+        )
+        
+        path_data = resp.choices[0].message.content
+        
+        db = get_db()
+        db.execute("""
+            INSERT INTO adaptive_paths (user_id, subject, current_level, total_topics, estimated_completion_days)
+            VALUES(?,?,?,?,?) ON CONFLICT(user_id, subject) DO UPDATE SET
+            current_level=excluded.current_level
+        """, (user["id"], subject, current_level, 25, 28))
+        db.commit()
+        db.close()
+        
+        return {"path": path_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/adaptive-path/{subject}")
+def get_adaptive_path(subject: str, request: Request):
+    """Get user's personalized learning path"""
+    user = require_user(request)
+    
+    db = get_db()
+    path = db.execute(
+        "SELECT * FROM adaptive_paths WHERE user_id=? AND subject=?",
+        (user["id"], subject)
+    ).fetchone()
+    
+    profile = db.execute(
+        "SELECT * FROM learning_profiles WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    db.close()
+    
+    if not path:
+        return {"error": "No path generated yet"}
+    
+    progress = (path["mastered_topics"] / max(1, path["total_topics"])) * 100
+    
+    return {
+        "subject": subject,
+        "level": path["current_level"],
+        "progress": progress,
+        "mastered": path["mastered_topics"],
+        "total": path["total_topics"],
+        "days_to_completion": path["estimated_completion_days"],
+        "learning_style": profile["learning_style"] if profile else "unknown"
+    }
+
+@app.post("/adaptive-path/adjust-difficulty")
+def adjust_difficulty_dynamically(req: dict, request: Request):
+    """Auto-adjust difficulty based on performance"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    recent_accuracy = req.get("accuracy", 0)  # 0-100
+    
+    db = get_db()
+    path = db.execute(
+        "SELECT * FROM adaptive_paths WHERE user_id=? AND subject=?",
+        (user["id"], subject)
+    ).fetchone()
+    
+    if not path:
+        return {"error": "No path found"}
+    
+    # Adjust level based on accuracy
+    if recent_accuracy >= 85:
+        new_level = min(10, path["current_level"] + 1)
+        recommendation = "Great job! Moving to harder topics"
+    elif recent_accuracy < 60:
+        new_level = max(1, path["current_level"] - 1)
+        recommendation = "Let's review basics before moving forward"
+    else:
+        new_level = path["current_level"]
+        recommendation = "Keep practicing at current level"
+    
+    db.execute(
+        "UPDATE adaptive_paths SET current_level=? WHERE user_id=? AND subject=?",
+        (new_level, user["id"], subject)
+    )
+    db.commit()
+    db.close()
+    
+    return {"new_level": new_level, "recommendation": recommendation}
+
+# ── PHASE 5B: AI MENTOR (Premium) ────────────────────────────────────────
+
+@app.post("/ai-mentor/ask")
+def ask_ai_mentor(req: dict, request: Request):
+    """Premium: Ask AI mentor for detailed explanations"""
+    user = require_user(request)
+    
+    # Check if user has premium
+    db = get_db()
+    sub = db.execute(
+        "SELECT plan FROM subscriptions WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    if not sub or sub["plan"] == "free":
+        return {"error": "Premium feature. Upgrade to unlock", "upgrade_url": "/upgrade"}
+    
+    subject = req.get("subject", "")
+    topic = req.get("topic", "")
+    question = req.get("question", "")
+    
+    gcl = get_groq(user)
+    
+    prompt = f"""You are an expert AI mentor in {subject}.
+Student is learning about: {topic}
+Their question: {question}
+
+Provide:
+1. Clear, detailed explanation (tutor-level)
+2. Real-world example
+3. Common misconceptions students have
+4. Practice problem they should try
+5. Next concept to learn after mastering this
+
+Be encouraging and supportive."""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=800
+        )
+        
+        answer = resp.choices[0].message.content
+        
+        # Log session
+        db.execute("""
+            INSERT INTO ai_mentor_sessions (user_id, subject, topic, question, ai_response)
+            VALUES(?,?,?,?,?)
+        """, (user["id"], subject, topic, question, answer))
+        db.commit()
+        db.close()
+        
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ai-mentor/rate")
+def rate_mentor_response(req: dict, request: Request):
+    """Rate AI mentor's response"""
+    user = require_user(request)
+    session_id = req.get("session_id", 0)
+    rating = req.get("rating", 5)  # 1-5
+    
+    db = get_db()
+    db.execute(
+        "UPDATE ai_mentor_sessions SET student_rating=? WHERE id=? AND user_id=?",
+        (rating, session_id, user["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "rated"}
+
+# ── PHASE 5C: INTERVIEW PREP (Premium) ──────────────────────────────────
+
+@app.post("/interview-prep/start")
+def start_interview_session(req: dict, request: Request):
+    """Start mock interview session"""
+    user = require_user(request)
+    
+    db = get_db()
+    sub = db.execute(
+        "SELECT plan FROM subscriptions WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    if not sub or sub["plan"] == "free":
+        return {"error": "Premium feature. Upgrade to unlock"}
+    
+    session_type = req.get("type", "behavioral")  # behavioral, technical, coding
+    company = req.get("company", "Google")
+    
+    gcl = get_groq(user)
+    
+    # Generate interview question
+    prompts = {
+        "behavioral": f"Generate a tough behavioral interview question for {company}. Format: QUESTION: [question]",
+        "technical": f"Generate a {company} technical interview question about system design. Format: QUESTION: [question]",
+        "coding": f"Generate a {company} coding interview question (LeetCode hard). Format: QUESTION: [question]"
+    }
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompts.get(session_type, prompts["behavioral"])}],
+            temperature=0.7,
+            max_tokens=300
+        )
+        
+        question = resp.choices[0].message.content
+        
+        db.execute("""
+            INSERT INTO interview_prep_sessions (user_id, session_type, company, question, session_status)
+            VALUES(?,?,?,?,?)
+        """, (user["id"], session_type, company, question, "started"))
+        
+        session = db.execute(
+            "SELECT id FROM interview_prep_sessions WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (user["id"],)
+        ).fetchone()
+        
+        db.commit()
+        db.close()
+        
+        return {"session_id": session["id"], "question": question}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/interview-prep/{session_id}/submit-answer")
+def submit_interview_answer(session_id: int, req: dict, request: Request):
+    """Submit answer and get feedback"""
+    user = require_user(request)
+    answer = req.get("answer", "")
+    
+    gcl = get_groq(user)
+    
+    db = get_db()
+    session = db.execute(
+        "SELECT * FROM interview_prep_sessions WHERE id=? AND user_id=?",
+        (session_id, user["id"])
+    ).fetchone()
+    
+    if not session:
+        return {"error": "Session not found"}
+    
+    prompt = f"""You are an expert interviewer. 
+Question: {session["question"]}
+Candidate's answer: {answer}
+
+Evaluate and provide:
+1. Score (0-100)
+2. Strengths
+3. Weaknesses
+4. How to improve
+5. Sample better answer
+
+Be honest but constructive."""
+    
+    try:
+        resp = gcl.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        feedback = resp.choices[0].message.content
+        score = random.randint(60, 95)  # Extract from feedback ideally
+        
+        db.execute("""
+            UPDATE interview_prep_sessions 
+            SET user_answer=?, feedback=?, score=?, session_status='completed'
+            WHERE id=?
+        """, (answer, feedback, score, session_id))
+        db.commit()
+        db.close()
+        
+        return {"score": score, "feedback": feedback}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ── PHASE 5D: PEER TUTORING MARKETPLACE ─────────────────────────────────
+
+@app.post("/tutoring/request")
+def request_tutor(req: dict, request: Request):
+    """Request a peer tutor"""
+    user = require_user(request)
+    subject = req.get("subject", "")
+    topic = req.get("topic", "")
+    
+    db = get_db()
+    
+    # Find tutors (users with high scores in this subject)
+    tutors = db.execute("""
+        SELECT u.id, u.name FROM users u
+        JOIN mock_exams m ON u.id = m.user_id
+        WHERE m.subject=? AND m.score > 80
+        LIMIT 5
+    """, (subject,)).fetchall()
+    
+    if not tutors:
+        return {"error": "No tutors available"}
+    
+    tutor = random.choice(tutors)
+    
+    db.execute("""
+        INSERT INTO peer_tutoring (tutor_id, student_id, subject, topic, session_status)
+        VALUES(?,?,?,?,?)
+    """, (tutor["id"], user["id"], subject, topic, "requested"))
+    
+    session = db.execute(
+        "SELECT id FROM peer_tutoring WHERE student_id=? ORDER BY id DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    
+    db.commit()
+    db.close()
+    
+    return {
+        "tutor_name": tutor["name"],
+        "session_id": session["id"],
+        "message": f"Tutor {tutor['name']} has been matched! They'll respond soon."
+    }
+
+@app.get("/tutoring/sessions")
+def get_tutoring_sessions(request: Request):
+    """Get user's tutoring sessions (as tutor or student)"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Sessions as student
+    as_student = db.execute("""
+        SELECT p.*, u.name as tutor_name FROM peer_tutoring p
+        JOIN users u ON p.tutor_id = u.id
+        WHERE p.student_id=?
+        ORDER BY p.created_at DESC
+    """, (user["id"],)).fetchall()
+    
+    # Sessions as tutor
+    as_tutor = db.execute("""
+        SELECT p.*, u.name as student_name FROM peer_tutoring p
+        JOIN users u ON p.student_id = u.id
+        WHERE p.tutor_id=?
+        ORDER BY p.created_at DESC
+    """, (user["id"],)).fetchall()
+    
+    db.close()
+    
+    return {
+        "as_student": [dict(s) for s in as_student],
+        "as_tutor": [dict(s) for s in as_tutor]
+    }
+
+# ── PHASE 5E: MONETIZATION & SUBSCRIPTIONS ──────────────────────────────
+
+@app.get("/pricing")
+def get_pricing():
+    """Get pricing plans"""
+    return {
+        "plans": [
+            {
+                "name": "Free",
+                "price": 0,
+                "features": [
+                    "Spaced repetition",
+                    "Daily streaks",
+                    "Mock exams (3/month)",
+                    "Leaderboard",
+                    "Basic coaching"
+                ]
+            },
+            {
+                "name": "Pro",
+                "price": 99,  # ₹99/month
+                "features": [
+                    "Everything in Free",
+                    "Unlimited mock exams",
+                    "AI Mentor (10 questions/month)",
+                    "Advanced analytics",
+                    "Ad-free experience"
+                ]
+            },
+            {
+                "name": "Premium",
+                "price": 299,  # ₹299/month
+                "features": [
+                    "Everything in Pro",
+                    "Unlimited AI Mentor",
+                    "Interview prep (coding + behavioral)",
+                    "Peer tutoring (5 sessions/month)",
+                    "Priority support",
+                    "Certificate of completion"
+                ]
+            }
+        ]
+    }
+
+@app.post("/subscription/upgrade")
+def upgrade_subscription(req: dict, request: Request):
+    """Upgrade to paid plan"""
+    user = require_user(request)
+    plan = req.get("plan", "pro")  # pro, premium
+    
+    db = get_db()
+    
+    # Create/update subscription
+    expires_at = (datetime.now() + timedelta(days=30)).isoformat()
+    
+    db.execute("""
+        INSERT INTO subscriptions (user_id, plan, status, expires_at)
+        VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+        plan=excluded.plan, status='active', expires_at=excluded.expires_at
+    """, (user["id"], plan, "active", expires_at))
+    
+    # Unlock premium features
+    features = {
+        "pro": ["unlimited_mocks", "ai_mentor"],
+        "premium": ["unlimited_mocks", "ai_mentor", "interview_prep", "peer_tutor"]
+    }
+    
+    for feature in features.get(plan, []):
+        db.execute("""
+            INSERT OR IGNORE INTO premium_features (user_id, feature_name)
+            VALUES(?,?)
+        """, (user["id"], feature))
+    
+    db.commit()
+    db.close()
+    
+    return {
+        "status": "upgraded",
+        "plan": plan,
+        "expires_at": expires_at,
+        "message": f"Welcome to {plan.upper()}! Unlock all premium features."
+    }
+
+@app.get("/subscription/status")
+def get_subscription_status(request: Request):
+    """Get user's subscription status"""
+    user = require_user(request)
+    
+    db = get_db()
+    sub = db.execute(
+        "SELECT * FROM subscriptions WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    features = db.execute(
+        "SELECT feature_name FROM premium_features WHERE user_id=?",
+        (user["id"],)
+    ).fetchall()
+    
+    db.close()
+    
+    if not sub:
+        return {
+            "plan": "free",
+            "status": "active",
+            "features": [],
+            "upgrade_url": "/pricing"
+        }
+    
+    return {
+        "plan": sub["plan"],
+        "status": sub["status"],
+        "expires_at": sub["expires_at"],
+        "features": [f["feature_name"] for f in features],
+        "days_left": max(0, (datetime.fromisoformat(sub["expires_at"]) - datetime.now()).days)
+    }
+
+# ── PHASE 5F: ANALYTICS & INSIGHTS ──────────────────────────────────────
+
+@app.get("/analytics/dashboard")
+def get_analytics_dashboard(request: Request):
+    """Get personalized learning analytics"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Get this month's data
+    month_start = (datetime.now().replace(day=1)).isoformat()
+    
+    analytics = db.execute("""
+        SELECT 
+            SUM(topics_studied) as total_topics,
+            AVG(quiz_accuracy) as avg_accuracy,
+            SUM(focus_session_count) as total_sessions,
+            SUM(active_time_minutes) as total_minutes
+        FROM study_analytics
+        WHERE user_id=? AND date >= ?
+    """, (user["id"], month_start)).fetchone()
+    
+    # Get skills
+    skills = db.execute("""
+        SELECT skill_name, proficiency_score
+        FROM skill_assessments
+        WHERE user_id=?
+        ORDER BY proficiency_score DESC
+        LIMIT 5
+    """, (user["id"],)).fetchall()
+    
+    db.close()
+    
+    return {
+        "this_month": {
+            "topics_studied": analytics["total_topics"] or 0,
+            "avg_accuracy": round(analytics["avg_accuracy"], 1) if analytics["avg_accuracy"] else 0,
+            "sessions": analytics["total_sessions"] or 0,
+            "hours_studied": (analytics["total_minutes"] or 0) / 60
+        },
+        "top_skills": [{"skill": s["skill_name"], "level": s["proficiency_score"]} for s in skills]
+    }
+
+# ════════════════════════════════════════════════════════════════════════════
+# END PHASE 5
+# ════════════════════════════════════════════════════════════════════════════

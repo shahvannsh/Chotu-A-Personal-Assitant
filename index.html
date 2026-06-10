@@ -620,6 +620,173 @@ body::after{content:'';position:fixed;inset:0;background:var(--web-overlay);poin
     <div><div class="section-label">🎯 CHALLENGE</div><button onclick="openChallengeModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">CHALLENGE</button></div>
     <div><div class="section-label">🎁 REFER</div><button onclick="openReferralModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px dashed var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">EARN</button></div>
     <div><div class="section-label">👥 FRIENDS</div><div id="friend-activity" style="font-family:var(--mono);font-size:8px;max-height:120px;overflow-y:auto;">loading...</div></div>
+
+<!-- PHASE 5 UI ADDITIONS
+Insert into index.html sidebar -->
+
+<!-- ADAPTIVE LEARNING PATH -->
+<div>
+  <div class="section-label">🎓 YOUR PATH</div>
+  <button onclick="openAdaptivePathModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
+    PERSONALIZED PLAN
+  </button>
+</div>
+
+<!-- AI MENTOR (Premium) -->
+<div>
+  <div class="section-label">🧠 AI MENTOR</div>
+  <button onclick="openAIMentorModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">
+    ASK MENTOR ★
+  </button>
+</div>
+
+<!-- INTERVIEW PREP (Premium) -->
+<div>
+  <div class="section-label">💼 INTERVIEW PREP</div>
+  <button onclick="openInterviewPrepModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">
+    MOCK INTERVIEW ★
+  </button>
+</div>
+
+<!-- PEER TUTORING -->
+<div>
+  <div class="section-label">👨‍🏫 PEER TUTOR</div>
+  <button onclick="openPeerTutoringModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
+    REQUEST TUTOR
+  </button>
+</div>
+
+<!-- ANALYTICS -->
+<div>
+  <div class="section-label">📈 YOUR STATS</div>
+  <button onclick="openAnalyticsModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
+    VIEW ANALYTICS
+  </button>
+</div>
+
+<!-- SUBSCRIPTION STATUS -->
+<div>
+  <div class="section-label">💎 PLAN</div>
+  <div id="subscription-status" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:9px;color:var(--text-dim);">
+    <div id="plan-name" style="color:var(--accent);margin-bottom:4px;">Free</div>
+    <button onclick="openPricingModal()" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:4px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">UPGRADE</button>
+  </div>
+</div>
+
+<!-- ADAPTIVE PATH MODAL -->
+<div id="adaptive-path-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎓 PERSONALIZED PATH</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="path-subject" type="text" placeholder="Subject (e.g., DSA)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <textarea id="path-goal" placeholder="Your goal (e.g., master DSA in 30 days)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:60px;resize:none;"></textarea>
+      <button onclick="generateAdaptivePath()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GENERATE PATH</button>
+      <button onclick="closeAdaptivePathModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI MENTOR MODAL -->
+<div id="ai-mentor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🧠 AI MENTOR ★</h2>
+    <div id="mentor-content" style="display:flex;flex-direction:column;gap:10px;">
+      <input id="mentor-subject" type="text" placeholder="Subject" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="mentor-topic" type="text" placeholder="Topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <textarea id="mentor-question" placeholder="Ask anything about this topic..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:80px;resize:none;"></textarea>
+      <button onclick="askAIMentor()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GET ANSWER</button>
+      <button onclick="closeAIMentorModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- INTERVIEW PREP MODAL -->
+<div id="interview-prep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">💼 INTERVIEW PREP ★</h2>
+    <div id="interview-content" style="display:flex;flex-direction:column;gap:10px;">
+      <select id="interview-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
+        <option value="behavioral">Behavioral</option>
+        <option value="technical">Technical</option>
+        <option value="coding">Coding</option>
+      </select>
+      <input id="interview-company" type="text" placeholder="Company (e.g., Google)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <div id="interview-question" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:10px;color:var(--accent);min-height:60px;">Generating question...</div>
+      <textarea id="interview-answer" placeholder="Your answer..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:100px;resize:none;"></textarea>
+      <button onclick="startInterviewSession()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">START INTERVIEW</button>
+      <button onclick="submitInterviewAnswer()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">SUBMIT & GET FEEDBACK</button>
+      <button onclick="closeInterviewPrepModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- PEER TUTORING MODAL -->
+<div id="peer-tutoring-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">👨‍🏫 PEER TUTORING</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="tutor-subject" type="text" placeholder="Subject you need help with" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="tutor-topic" type="text" placeholder="Specific topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <button onclick="requestTutor()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">FIND TUTOR</button>
+      <button onclick="closePeerTutoringModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS MODAL -->
+<div id="analytics-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📈 YOUR ANALYTICS</h2>
+    <div id="analytics-content" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--mono);font-size:10px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Topics Studied</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-topics">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-accuracy">0%</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Sessions</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-sessions">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-hours">0</div>
+      </div>
+    </div>
+    <button onclick="closeAnalyticsModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+<!-- PRICING MODAL -->
+<div id="pricing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;overflow-y:auto;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;margin:20px auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:16px;text-align:center;">💎 CHOOSE YOUR PLAN</h2>
+    <div id="pricing-content" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:8px;font-weight:bold;">FREE</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Spaced Rep · Streaks · 3 Mocks · Leaderboard</div>
+        <button onclick="closeP ricingModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">CURRENT</button>
+      </div>
+      <div style="background:var(--surface2);border:2px solid var(--green);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-bottom:4px;font-weight:bold;">PRO</div>
+        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹99<span style="font-size:10px;">/mo</span></div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Unlimited Mocks · AI Mentor · No Ads</div>
+        <button onclick="upgradePlan('pro')" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PREMIUM</div>
+        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹299<span style="font-size:10px;">/mo</span></div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">+ Interview Prep · Peer Tutoring · Priority</div>
+        <button onclick="upgradePlan('premium')" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
+      </div>
+    </div>
+    <button onclick="closePricingModal()" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+
     </div>
   </aside>
 
@@ -1726,6 +1893,42 @@ function openReferralModal(){document.getElementById('referral-modal').style.dis
 function closeReferralModal(){document.getElementById('referral-modal').style.display='none';}
 async function generateReferralLink(){document.getElementById('referral-text').value='Join Chotu - AI Study OS: https://chotu-lcc7.onrender.com';}
 document.addEventListener('DOMContentLoaded',()=>{loadMVPData();loadDailyGoal();loadBadges();loadFriendActivity();setInterval(()=>{loadMVPData();loadDailyGoal();},5*60*1000);});
+
+<script>
+// PHASE 5 FUNCTIONS
+
+// Modals
+function openAdaptivePathModal(){document.getElementById('adaptive-path-modal').style.display='flex';}
+function closeAdaptivePathModal(){document.getElementById('adaptive-path-modal').style.display='none';}
+async function generateAdaptivePath(){const s=document.getElementById('path-subject').value;const g=document.getElementById('path-goal').value;if(!s||!g){alert('Fill all fields');return;}try{const res=await fetch('/adaptive-path/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,goal:g})}).then(r=>r.json());appendMsg('assistant',res.path);closeAdaptivePathModal();}catch(e){console.error('Error:',e);}}
+
+function openAIMentorModal(){document.getElementById('ai-mentor-modal').style.display='flex';}
+function closeAIMentorModal(){document.getElementById('ai-mentor-modal').style.display='none';}
+async function askAIMentor(){const s=document.getElementById('mentor-subject').value;const t=document.getElementById('mentor-topic').value;const q=document.getElementById('mentor-question').value;if(!s||!t||!q){alert('Fill all fields');return;}try{const res=await fetch('/ai-mentor/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,topic:t,question:q})}).then(r=>r.json());if(res.error){alert(res.error);return;}appendMsg('assistant','🧠 AI Mentor:\n\n'+res.answer);closeAIMentorModal();}catch(e){console.error('Error:',e);}}
+
+function openInterviewPrepModal(){document.getElementById('interview-prep-modal').style.display='flex';startInterviewSession();}
+function closeInterviewPrepModal(){document.getElementById('interview-prep-modal').style.display='none';}
+async function startInterviewSession(){const t=document.getElementById('interview-type').value;const c=document.getElementById('interview-company').value||'Google';try{const res=await fetch('/interview-prep/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t,company:c})}).then(r=>r.json());if(res.error){alert(res.error);return;}document.getElementById('interview-question').textContent=res.question;document.getElementById('interview-answer').dataset.sessionId=res.session_id;}catch(e){console.error('Error:',e);}}
+async function submitInterviewAnswer(){const ans=document.getElementById('interview-answer').value;const sid=document.getElementById('interview-answer').dataset.sessionId;if(!ans||!sid){alert('Answer the question first');return;}try{const res=await fetch(`/interview-prep/${sid}/submit-answer`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer:ans})}).then(r=>r.json());appendMsg('assistant','💼 Interview Feedback:\n\nScore: '+res.score+'/100\n\n'+res.feedback);}catch(e){console.error('Error:',e);}}
+
+function openPeerTutoringModal(){document.getElementById('peer-tutoring-modal').style.display='flex';}
+function closePeerTutoringModal(){document.getElementById('peer-tutoring-modal').style.display='none';}
+async function requestTutor(){const s=document.getElementById('tutor-subject').value;const t=document.getElementById('tutor-topic').value;if(!s||!t){alert('Fill all fields');return;}try{const res=await fetch('/tutoring/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,topic:t})}).then(r=>r.json());if(res.error){alert(res.error);return;}appendMsg('assistant','👨‍🏫 Tutor matched:\n\n'+res.message);closePeerTutoringModal();}catch(e){console.error('Error:',e);}}
+
+function openAnalyticsModal(){document.getElementById('analytics-modal').style.display='flex';loadAnalytics();}
+function closeAnalyticsModal(){document.getElementById('analytics-modal').style.display='none';}
+async function loadAnalytics(){try{const res=await fetch('/analytics/dashboard').then(r=>r.json());document.getElementById('analytics-topics').textContent=res.this_month.topics_studied;document.getElementById('analytics-accuracy').textContent=res.this_month.avg_accuracy+'%';document.getElementById('analytics-sessions').textContent=res.this_month.sessions;document.getElementById('analytics-hours').textContent=res.this_month.hours_studied.toFixed(1);}catch(e){}}
+
+function openPricingModal(){document.getElementById('pricing-modal').style.display='flex';}
+function closePricingModal(){document.getElementById('pricing-modal').style.display='none';}
+async function upgradePlan(plan){try{const res=await fetch('/subscription/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan})}).then(r=>r.json());appendMsg('assistant','💎 Upgraded to '+plan+'!\n\n'+res.message);closePricingModal();loadSubscriptionStatus();}catch(e){console.error('Error:',e);}}
+
+async function loadSubscriptionStatus(){try{const res=await fetch('/subscription/status').then(r=>r.json());document.getElementById('plan-name').textContent=res.plan.toUpperCase();const btn=document.querySelector('#subscription-status button');if(res.plan==='free'){btn.style.background='var(--green)';btn.textContent='UPGRADE';}else{btn.style.background='var(--accent)';btn.textContent=res.days_left+' DAYS LEFT';}}catch(e){}}
+
+document.addEventListener('DOMContentLoaded',()=>{loadSubscriptionStatus();});
+</script>
+
+
 </script>
 
 <div id="graph-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;width:90%;max-width:600px;"><div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin:0;">📚 PATH</h2><button onclick="closeGraphModal()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;">×</button></div><div id="graph-info" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">Topics connected by prerequisites</div></div></div>
@@ -1735,5 +1938,119 @@ document.addEventListener('DOMContentLoaded',()=>{loadMVPData();loadDailyGoal();
 <div id="share-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📤 SHARE</h2><button onclick="openShareModal()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">SHARE SCORE</button><button onclick="closeShareModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
 <div id="challenge-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CHALLENGE</h2><input id="challenge-target" type="number" placeholder="Target" style="width:100%;background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;border-radius:4px;font-family:var(--mono);font-size:10px;margin-bottom:10px;outline:none;"/><button onclick="createChallenge()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">CREATE</button><button onclick="closeChallengeModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
 <div id="referral-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🎁 REFER</h2><textarea id="referral-text" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:8px;color:var(--text-hi);font-family:var(--mono);font-size:9px;resize:none;margin-bottom:10px;" readonly></textarea><button onclick="generateReferralLink()" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">GENERATE</button><button onclick="closeReferralModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
+
+<div id="adaptive-path-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎓 PERSONALIZED PATH</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="path-subject" type="text" placeholder="Subject (e.g., DSA)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <textarea id="path-goal" placeholder="Your goal (e.g., master DSA in 30 days)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:60px;resize:none;"></textarea>
+      <button onclick="generateAdaptivePath()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GENERATE PATH</button>
+      <button onclick="closeAdaptivePathModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI MENTOR MODAL -->
+<div id="ai-mentor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🧠 AI MENTOR ★</h2>
+    <div id="mentor-content" style="display:flex;flex-direction:column;gap:10px;">
+      <input id="mentor-subject" type="text" placeholder="Subject" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="mentor-topic" type="text" placeholder="Topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <textarea id="mentor-question" placeholder="Ask anything about this topic..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:80px;resize:none;"></textarea>
+      <button onclick="askAIMentor()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GET ANSWER</button>
+      <button onclick="closeAIMentorModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- INTERVIEW PREP MODAL -->
+<div id="interview-prep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">💼 INTERVIEW PREP ★</h2>
+    <div id="interview-content" style="display:flex;flex-direction:column;gap:10px;">
+      <select id="interview-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
+        <option value="behavioral">Behavioral</option>
+        <option value="technical">Technical</option>
+        <option value="coding">Coding</option>
+      </select>
+      <input id="interview-company" type="text" placeholder="Company (e.g., Google)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <div id="interview-question" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:10px;color:var(--accent);min-height:60px;">Generating question...</div>
+      <textarea id="interview-answer" placeholder="Your answer..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:100px;resize:none;"></textarea>
+      <button onclick="startInterviewSession()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">START INTERVIEW</button>
+      <button onclick="submitInterviewAnswer()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">SUBMIT & GET FEEDBACK</button>
+      <button onclick="closeInterviewPrepModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- PEER TUTORING MODAL -->
+<div id="peer-tutoring-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">👨‍🏫 PEER TUTORING</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="tutor-subject" type="text" placeholder="Subject you need help with" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="tutor-topic" type="text" placeholder="Specific topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <button onclick="requestTutor()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">FIND TUTOR</button>
+      <button onclick="closePeerTutoringModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS MODAL -->
+<div id="analytics-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📈 YOUR ANALYTICS</h2>
+    <div id="analytics-content" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--mono);font-size:10px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Topics Studied</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-topics">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-accuracy">0%</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Sessions</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-sessions">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
+        <div style="color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
+        <div style="color:var(--accent);font-size:18px;" id="analytics-hours">0</div>
+      </div>
+    </div>
+    <button onclick="closeAnalyticsModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+<!-- PRICING MODAL -->
+<div id="pricing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;overflow-y:auto;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;margin:20px auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:16px;text-align:center;">💎 CHOOSE YOUR PLAN</h2>
+    <div id="pricing-content" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:8px;font-weight:bold;">FREE</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Spaced Rep · Streaks · 3 Mocks · Leaderboard</div>
+        <button onclick="closeP ricingModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">CURRENT</button>
+      </div>
+      <div style="background:var(--surface2);border:2px solid var(--green);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-bottom:4px;font-weight:bold;">PRO</div>
+        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹99<span style="font-size:10px;">/mo</span></div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Unlimited Mocks · AI Mentor · No Ads</div>
+        <button onclick="upgradePlan('pro')" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PREMIUM</div>
+        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹299<span style="font-size:10px;">/mo</span></div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">+ Interview Prep · Peer Tutoring · Priority</div>
+        <button onclick="upgradePlan('premium')" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
+      </div>
+    </div>
+    <button onclick="closePricingModal()" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+
 </body>
 </html>

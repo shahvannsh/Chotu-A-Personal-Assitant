@@ -787,6 +787,107 @@ Insert into index.html sidebar -->
 </div>
 
 
+
+<!-- PERSISTENCE UI ADDITIONS
+Insert into index.html sidebar -->
+
+<!-- NOTES WIDGET -->
+<div>
+  <div class="section-label">📝 MY NOTES</div>
+  <div style="display:flex;gap:4px;margin-bottom:8px;">
+    <input id="note-title" type="text" placeholder="Note title..." maxlength="50" style="flex:1;background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:6px;font-family:var(--mono);font-size:9px;border-radius:3px;outline:none;"/>
+    <button onclick="createNote()" style="background:var(--accent);border:none;color:var(--bg);padding:6px 10px;cursor:pointer;font-family:var(--mono);font-size:9px;border-radius:3px;font-weight:bold;">+</button>
+  </div>
+  <div id="notes-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;font-family:var(--mono);font-size:8px;">
+    <div style="text-align:center;color:var(--text-dim);padding:8px;">no notes yet</div>
+  </div>
+</div>
+
+<!-- BOOKMARKS WIDGET -->
+<div>
+  <div class="section-label">🔖 BOOKMARKS</div>
+  <div id="bookmarks-list" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;font-family:var(--mono);font-size:8px;">
+    <div style="text-align:center;color:var(--text-dim);padding:8px;">no bookmarks</div>
+  </div>
+</div>
+
+<!-- GOALS WIDGET -->
+<div>
+  <div class="section-label">🎯 MY GOALS</div>
+  <button onclick="openGoalsModal()" style="width:100%;font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;margin-bottom:8px;">+ ADD GOAL</button>
+  <div id="goals-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
+    <div style="text-align:center;color:var(--text-dim);padding:8px;font-size:9px;">no goals yet</div>
+  </div>
+</div>
+
+<!-- HISTORY WIDGET -->
+<div>
+  <div class="section-label">📊 STUDY STATS</div>
+  <button onclick="openHistoryModal()" style="width:100%;font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;margin-bottom:8px;">VIEW HISTORY</button>
+  <div id="stats-summary" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:9px;color:var(--text-dim);">
+    <div>Sessions: <span id="stat-sessions">0</span></div>
+    <div>Hours: <span id="stat-hours">0</span>h</div>
+    <div>Accuracy: <span id="stat-accuracy">0</span>%</div>
+  </div>
+</div>
+
+<!-- NOTES MODAL -->
+<div id="notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📝 ALL NOTES</h2>
+    <div id="all-notes-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      loading...
+    </div>
+    <button onclick="closeNotesModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+<!-- GOALS MODAL -->
+<div id="goals-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CREATE GOAL</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="goal-name" type="text" placeholder="Goal name" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <select id="goal-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
+        <option value="exam">Exam Prep</option>
+        <option value="skill">Skill Mastery</option>
+        <option value="streak">Streak</option>
+        <option value="subject">Subject Mastery</option>
+      </select>
+      <input id="goal-target" type="text" placeholder="Target (e.g., 90/100)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="goal-deadline" type="date" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <button onclick="addGoal()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">CREATE</button>
+      <button onclick="closeGoalsModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div id="history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📊 STUDY HISTORY</h2>
+    <div id="history-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Total Sessions</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-sessions">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-hours">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-accuracy">0%</div>
+      </div>
+    </div>
+    <div id="history-list" style="display:flex;flex-direction:column;gap:6px;">
+      loading...
+    </div>
+    <button onclick="closeHistoryModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+
     </div>
   </aside>
 
@@ -1929,6 +2030,35 @@ document.addEventListener('DOMContentLoaded',()=>{loadSubscriptionStatus();});
 </script>
 
 
+
+<script>
+// PERSISTENCE FUNCTIONS
+
+// Notes
+async function createNote(){const title=document.getElementById('note-title').value;if(!title.trim()){alert('Enter note title');return;}try{await fetch('/notes/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,content:''})});document.getElementById('note-title').value='';loadNotes();}catch(e){console.error('Note error:',e);}}
+async function loadNotes(){try{const res=await fetch('/notes').then(r=>r.json());const list=document.getElementById('notes-list');if(!res.notes||res.notes.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;">no notes</div>';return;}list.innerHTML=res.notes.slice(0,5).map(n=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;cursor:pointer;" onclick="editNote(${n.id})">${n.title.substring(0,30)}</div>`).join('');}catch(e){}}
+async function editNote(id){try{const note=await fetch(`/notes/${id}`).then(r=>r.json());const content=prompt('Edit note:',note.content);if(content!==null){await fetch(`/notes/${id}/update`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:note.title,content})});loadNotes();}}catch(e){}}
+
+// Bookmarks
+async function loadBookmarks(){try{const res=await fetch('/bookmarks').then(r=>r.json());const list=document.getElementById('bookmarks-list');if(!res.bookmarks||res.bookmarks.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;">no bookmarks</div>';return;}list.innerHTML=res.bookmarks.slice(0,3).map(b=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;font-size:8px;">${b.resource_title.substring(0,25)}</div>`).join('');}catch(e){}}
+
+// Goals
+function openGoalsModal(){document.getElementById('goals-modal').style.display='flex';}
+function closeGoalsModal(){document.getElementById('goals-modal').style.display='none';}
+async function addGoal(){const name=document.getElementById('goal-name').value;const type=document.getElementById('goal-type').value;const target=document.getElementById('goal-target').value;const deadline=document.getElementById('goal-deadline').value;if(!name||!target||!deadline){alert('Fill all fields');return;}try{await fetch('/goals/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,type,target,deadline})});document.getElementById('goal-name').value='';document.getElementById('goal-target').value='';closeGoalsModal();loadGoals();}catch(e){}}
+async function loadGoals(){try{const res=await fetch('/goals').then(r=>r.json());const list=document.getElementById('goals-list');if(!res.goals||res.goals.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;font-size:9px;">no goals</div>';return;}list.innerHTML=res.goals.map(g=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;"><div style="font-family:var(--mono);font-size:9px;color:var(--accent);">${g.goal_name}</div><div style="font-family:var(--mono);font-size:8px;color:var(--text-dim);">Progress: ${g.progress}%</div></div>`).join('');}catch(e){}}
+
+// History
+function openHistoryModal(){document.getElementById('history-modal').style.display='flex';loadHistoryStats();}
+function closeHistoryModal(){document.getElementById('history-modal').style.display='none';}
+async function loadHistoryStats(){try{const res=await fetch('/history/stats').then(r=>r.json());document.getElementById('hist-sessions').textContent=res.total_sessions;document.getElementById('hist-hours').textContent=res.total_hours;document.getElementById('hist-accuracy').textContent=res.avg_accuracy+'%';}catch(e){}}
+async function loadStatsSummary(){try{const res=await fetch('/history/stats').then(r=>r.json());document.getElementById('stat-sessions').textContent=res.total_sessions;document.getElementById('stat-hours').textContent=res.total_hours.toFixed(1);document.getElementById('stat-accuracy').textContent=Math.round(res.avg_accuracy);}catch(e){}}
+
+// Load all on page load
+document.addEventListener('DOMContentLoaded',()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();setInterval(()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();},10*60*1000);});
+</script>
+
+
 </script>
 
 <div id="graph-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;width:90%;max-width:600px;"><div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin:0;">📚 PATH</h2><button onclick="closeGraphModal()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;">×</button></div><div id="graph-info" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">Topics connected by prerequisites</div></div></div>
@@ -2048,6 +2178,63 @@ document.addEventListener('DOMContentLoaded',()=>{loadSubscriptionStatus();});
       </div>
     </div>
     <button onclick="closePricingModal()" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+
+
+<div id="notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📝 ALL NOTES</h2>
+    <div id="all-notes-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      loading...
+    </div>
+    <button onclick="closeNotesModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
+  </div>
+</div>
+
+<!-- GOALS MODAL -->
+<div id="goals-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CREATE GOAL</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input id="goal-name" type="text" placeholder="Goal name" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <select id="goal-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
+        <option value="exam">Exam Prep</option>
+        <option value="skill">Skill Mastery</option>
+        <option value="streak">Streak</option>
+        <option value="subject">Subject Mastery</option>
+      </select>
+      <input id="goal-target" type="text" placeholder="Target (e.g., 90/100)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <input id="goal-deadline" type="date" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
+      <button onclick="addGoal()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">CREATE</button>
+      <button onclick="closeGoalsModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div id="history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📊 STUDY HISTORY</h2>
+    <div id="history-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Total Sessions</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-sessions">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-hours">0</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
+        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-accuracy">0%</div>
+      </div>
+    </div>
+    <div id="history-list" style="display:flex;flex-direction:column;gap:6px;">
+      loading...
+    </div>
+    <button onclick="closeHistoryModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
   </div>
 </div>
 

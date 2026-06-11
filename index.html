@@ -1421,7 +1421,7 @@ init();
     <!-- source toggle -->
     <div class="mp-source-toggle">
       <button class="mp-src-btn active" id="srcGenBtn" onclick="setSource('generated')">⚡ GENERATED</button>
-      <button class="mp-src-btn" id="srcYtBtn"  onclick="setSource('youtube')">▶ YOUTUBE</button>
+      <button class="mp-src-btn" id="srcYtBtn" onclick="openRandomYouTube()" style="cursor:pointer;">▶ YOUTUBE</button>
     </div>
     <!-- mood -->
     <div class="mp-moods">
@@ -1624,7 +1624,7 @@ function setVolume(val) {
   if (MP.gainNode) MP.gainNode.gain.value = MP.muted ? 0 : MP.volume / 100;
   // YouTube volume via postMessage
   const frame = document.getElementById('mpYtFrame');
-  if (MP.source === 'youtube' && MP.playing) {
+  if (false) {
     try { frame.contentWindow.postMessage(JSON.stringify({event:'command',func:'setVolume',args:[MP.volume]}), '*'); } catch(e) {}
   }
   document.getElementById('mpVolIcon') && (document.getElementById('mpVolIcon').textContent = MP.volume === 0 ? '🔇' : '🔊');
@@ -2058,6 +2058,12 @@ async function loadStatsSummary(){try{const res=await fetch('/history/stats').th
 document.addEventListener('DOMContentLoaded',()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();setInterval(()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();},10*60*1000);});
 </script>
 
+
+
+function openRandomYouTube() {
+  const randomLink = getRandomYouTubeLink();
+  window.open(randomLink, '_blank', 'noopener,noreferrer');
+}
 
 </script>
 

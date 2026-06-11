@@ -2890,3 +2890,483 @@ def get_analytics_dashboard(request: Request):
 # ════════════════════════════════════════════════════════════════════════════
 # END PHASE 5
 # ════════════════════════════════════════════════════════════════════════════
+# USER DATA PERSISTENCE
+# Add these to server.py after Phase 5 endpoints
+
+# ════════════════════════════════════════════════════════════════════════════
+# DATA PERSISTENCE: NOTES, BOOKMARKS, HISTORY, PREFERENCES
+# ════════════════════════════════════════════════════════════════════════════
+
+# Add to init_db() - new tables:
+"""
+CREATE TABLE IF NOT EXISTS user_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT,
+    subject TEXT,
+    topic TEXT,
+    tags TEXT,  -- comma-separated
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    color TEXT DEFAULT '#4a5568',
+    pinned BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    resource_type TEXT,  -- question, concept, video, article
+    resource_id TEXT,
+    resource_title TEXT,
+    resource_url TEXT,
+    subject TEXT,
+    topic TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS study_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT,
+    topic TEXT,
+    session_type TEXT,  -- quiz, mock, focus, coaching
+    duration_minutes INTEGER,
+    score INTEGER,
+    accuracy FLOAT,
+    completed BOOLEAN DEFAULT TRUE,
+    date TEXT DEFAULT (datetime('now')),
+    notes TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    goal_name TEXT NOT NULL,
+    goal_type TEXT,  -- exam, skill, subject_mastery, streak
+    target_value TEXT,  -- e.g., "score 90/100", "30-day streak"
+    deadline TEXT,
+    progress INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'active',  -- active, completed, abandoned
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences_extended (
+    user_id INTEGER PRIMARY KEY,
+    theme TEXT DEFAULT 'default',
+    sidebar_collapsed BOOLEAN DEFAULT FALSE,
+    notifications_enabled BOOLEAN DEFAULT TRUE,
+    notification_time TEXT DEFAULT '20:59',
+    dark_mode BOOLEAN DEFAULT TRUE,
+    language TEXT DEFAULT 'en',
+    focus_session_duration INTEGER DEFAULT 25,
+    break_duration INTEGER DEFAULT 5,
+    auto_save_enabled BOOLEAN DEFAULT TRUE,
+    last_active TEXT DEFAULT (datetime('now')),
+    last_sync TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    query TEXT,
+    subject TEXT,
+    topic TEXT,
+    search_count INTEGER DEFAULT 1,
+    last_searched TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject TEXT,
+    total_hours_studied FLOAT DEFAULT 0,
+    topics_completed INTEGER DEFAULT 0,
+    topics_total INTEGER DEFAULT 0,
+    avg_accuracy FLOAT DEFAULT 0,
+    last_study_date TEXT,
+    next_review_date TEXT,
+    proficiency_level INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, subject)
+);
+"""
+
+# ── NOTES: CREATE, READ, UPDATE, DELETE ────────────────────────────────────
+
+@app.post("/notes/create")
+def create_note(req: dict, request: Request):
+    """Create a new note"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO user_notes (user_id, title, content, subject, topic, tags, pinned)
+        VALUES(?,?,?,?,?,?,?)
+    """, (user["id"], req.get("title", "Untitled"), req.get("content", ""), 
+          req.get("subject", ""), req.get("topic", ""), req.get("tags", ""), 
+          req.get("pinned", False)))
+    
+    note = db.execute(
+        "SELECT id FROM user_notes WHERE user_id=? ORDER BY id DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    
+    db.commit()
+    db.close()
+    
+    return {"note_id": note["id"], "status": "created"}
+
+@app.get("/notes")
+def get_notes(request: Request):
+    """Get all user's notes"""
+    user = require_user(request)
+    
+    db = get_db()
+    notes = db.execute(
+        "SELECT * FROM user_notes WHERE user_id=? ORDER BY pinned DESC, updated_at DESC",
+        (user["id"],)
+    ).fetchall()
+    db.close()
+    
+    return {"notes": [dict(n) for n in notes]}
+
+@app.get("/notes/{note_id}")
+def get_note(note_id: int, request: Request):
+    """Get specific note"""
+    user = require_user(request)
+    
+    db = get_db()
+    note = db.execute(
+        "SELECT * FROM user_notes WHERE id=? AND user_id=?",
+        (note_id, user["id"])
+    ).fetchone()
+    db.close()
+    
+    if not note:
+        raise HTTPException(status_code=404)
+    
+    return dict(note)
+
+@app.post("/notes/{note_id}/update")
+def update_note(note_id: int, req: dict, request: Request):
+    """Update note"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        UPDATE user_notes 
+        SET title=?, content=?, subject=?, topic=?, tags=?, pinned=?, updated_at=datetime('now')
+        WHERE id=? AND user_id=?
+    """, (req.get("title"), req.get("content"), req.get("subject", ""),
+          req.get("topic", ""), req.get("tags", ""), req.get("pinned", False),
+          note_id, user["id"]))
+    db.commit()
+    db.close()
+    
+    return {"status": "updated"}
+
+@app.delete("/notes/{note_id}")
+def delete_note(note_id: int, request: Request):
+    """Delete note"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute(
+        "DELETE FROM user_notes WHERE id=? AND user_id=?",
+        (note_id, user["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "deleted"}
+
+# ── BOOKMARKS ────────────────────────────────────────────────────────────
+
+@app.post("/bookmarks/add")
+def add_bookmark(req: dict, request: Request):
+    """Bookmark a resource"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO bookmarks (user_id, resource_type, resource_id, resource_title, resource_url, subject, topic, notes)
+        VALUES(?,?,?,?,?,?,?,?)
+    """, (user["id"], req.get("type", ""), req.get("resource_id", ""), req.get("title", ""),
+          req.get("url", ""), req.get("subject", ""), req.get("topic", ""), req.get("notes", "")))
+    db.commit()
+    db.close()
+    
+    return {"status": "bookmarked"}
+
+@app.get("/bookmarks")
+def get_bookmarks(request: Request):
+    """Get all bookmarks"""
+    user = require_user(request)
+    
+    db = get_db()
+    bookmarks = db.execute(
+        "SELECT * FROM bookmarks WHERE user_id=? ORDER BY created_at DESC",
+        (user["id"],)
+    ).fetchall()
+    db.close()
+    
+    return {"bookmarks": [dict(b) for b in bookmarks]}
+
+@app.delete("/bookmarks/{bookmark_id}")
+def remove_bookmark(bookmark_id: int, request: Request):
+    """Remove bookmark"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute(
+        "DELETE FROM bookmarks WHERE id=? AND user_id=?",
+        (bookmark_id, user["id"])
+    )
+    db.commit()
+    db.close()
+    
+    return {"status": "removed"}
+
+# ── STUDY HISTORY ────────────────────────────────────────────────────────
+
+@app.post("/history/log")
+def log_study_session(req: dict, request: Request):
+    """Log a study session"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO study_history (user_id, subject, topic, session_type, duration_minutes, score, accuracy, notes)
+        VALUES(?,?,?,?,?,?,?,?)
+    """, (user["id"], req.get("subject", ""), req.get("topic", ""), req.get("type", ""),
+          req.get("duration", 0), req.get("score", 0), req.get("accuracy", 0), req.get("notes", "")))
+    db.commit()
+    db.close()
+    
+    return {"status": "logged"}
+
+@app.get("/history")
+def get_study_history(request: Request):
+    """Get study history (last 30 days)"""
+    user = require_user(request)
+    
+    db = get_db()
+    thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+    
+    history = db.execute("""
+        SELECT * FROM study_history 
+        WHERE user_id=? AND date >= ?
+        ORDER BY date DESC
+        LIMIT 100
+    """, (user["id"], thirty_days_ago)).fetchall()
+    db.close()
+    
+    return {"history": [dict(h) for h in history]}
+
+@app.get("/history/stats")
+def get_history_stats(request: Request):
+    """Get study statistics"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    stats = db.execute("""
+        SELECT 
+            COUNT(*) as total_sessions,
+            SUM(duration_minutes) as total_minutes,
+            AVG(accuracy) as avg_accuracy,
+            COUNT(DISTINCT subject) as subjects_studied,
+            COUNT(DISTINCT topic) as topics_studied,
+            MAX(date) as last_session
+        FROM study_history
+        WHERE user_id=?
+    """, (user["id"],)).fetchone()
+    
+    db.close()
+    
+    return {
+        "total_sessions": stats["total_sessions"] or 0,
+        "total_hours": round((stats["total_minutes"] or 0) / 60, 1),
+        "avg_accuracy": round(stats["avg_accuracy"], 1) if stats["avg_accuracy"] else 0,
+        "subjects": stats["subjects_studied"] or 0,
+        "topics": stats["topics_studied"] or 0,
+        "last_session": stats["last_session"]
+    }
+
+# ── GOALS ────────────────────────────────────────────────────────────────
+
+@app.post("/goals/create")
+def create_goal(req: dict, request: Request):
+    """Create a study goal"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO user_goals (user_id, goal_name, goal_type, target_value, deadline)
+        VALUES(?,?,?,?,?)
+    """, (user["id"], req.get("name", ""), req.get("type", ""), req.get("target", ""), req.get("deadline", "")))
+    
+    goal = db.execute(
+        "SELECT id FROM user_goals WHERE user_id=? ORDER BY id DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    
+    db.commit()
+    db.close()
+    
+    return {"goal_id": goal["id"], "status": "created"}
+
+@app.get("/goals")
+def get_goals(request: Request):
+    """Get user's goals"""
+    user = require_user(request)
+    
+    db = get_db()
+    goals = db.execute(
+        "SELECT * FROM user_goals WHERE user_id=? AND status='active' ORDER BY deadline ASC",
+        (user["id"],)
+    ).fetchall()
+    db.close()
+    
+    return {"goals": [dict(g) for g in goals]}
+
+@app.post("/goals/{goal_id}/update-progress")
+def update_goal_progress(goal_id: int, req: dict, request: Request):
+    """Update goal progress"""
+    user = require_user(request)
+    progress = req.get("progress", 0)
+    
+    db = get_db()
+    db.execute(
+        "UPDATE user_goals SET progress=? WHERE id=? AND user_id=?",
+        (progress, goal_id, user["id"])
+    )
+    
+    if progress >= 100:
+        db.execute(
+            "UPDATE user_goals SET status='completed', completed_at=datetime('now') WHERE id=?",
+            (goal_id,)
+        )
+    
+    db.commit()
+    db.close()
+    
+    return {"status": "updated"}
+
+# ── USER PREFERENCES ─────────────────────────────────────────────────────
+
+@app.get("/preferences")
+def get_preferences(request: Request):
+    """Get user preferences"""
+    user = require_user(request)
+    
+    db = get_db()
+    prefs = db.execute(
+        "SELECT * FROM user_preferences_extended WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    db.close()
+    
+    if not prefs:
+        return {
+            "theme": "default",
+            "dark_mode": True,
+            "notifications": True,
+            "language": "en"
+        }
+    
+    return dict(prefs)
+
+@app.post("/preferences/update")
+def update_preferences(req: dict, request: Request):
+    """Update user preferences"""
+    user = require_user(request)
+    
+    db = get_db()
+    db.execute("""
+        INSERT INTO user_preferences_extended 
+        (user_id, theme, dark_mode, notifications_enabled, language, focus_session_duration, last_sync)
+        VALUES(?,?,?,?,?,?,datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+        theme=excluded.theme,
+        dark_mode=excluded.dark_mode,
+        notifications_enabled=excluded.notifications_enabled,
+        language=excluded.language,
+        focus_session_duration=excluded.focus_session_duration,
+        last_sync=datetime('now')
+    """, (user["id"], req.get("theme", "default"), req.get("dark_mode", True),
+          req.get("notifications", True), req.get("language", "en"), 
+          req.get("focus_duration", 25)))
+    db.commit()
+    db.close()
+    
+    return {"status": "preferences_saved"}
+
+# ── DASHBOARD: ALL USER DATA ─────────────────────────────────────────────
+
+@app.get("/dashboard/complete")
+def get_complete_dashboard(request: Request):
+    """Get all user data for dashboard"""
+    user = require_user(request)
+    
+    db = get_db()
+    
+    # Get all data
+    notes = db.execute(
+        "SELECT id, title, updated_at FROM user_notes WHERE user_id=? ORDER BY updated_at DESC LIMIT 5",
+        (user["id"],)
+    ).fetchall()
+    
+    bookmarks = db.execute(
+        "SELECT id, resource_title FROM bookmarks WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
+        (user["id"],)
+    ).fetchall()
+    
+    goals = db.execute(
+        "SELECT id, goal_name, progress FROM user_goals WHERE user_id=? AND status='active'",
+        (user["id"],)
+    ).fetchall()
+    
+    streak = db.execute(
+        "SELECT current_streak, longest_streak FROM streaks WHERE user_id=?",
+        (user["id"],)
+    ).fetchone()
+    
+    history_stats = db.execute("""
+        SELECT COUNT(*) as sessions, SUM(duration_minutes) as total_min, AVG(accuracy) as avg_acc
+        FROM study_history WHERE user_id=?
+    """, (user["id"],)).fetchone()
+    
+    db.close()
+    
+    return {
+        "profile": {
+            "name": user["name"],
+            "email": user["email"]
+        },
+        "streak": {
+            "current": streak["current_streak"] if streak else 0,
+            "longest": streak["longest_streak"] if streak else 0
+        },
+        "stats": {
+            "sessions": history_stats["sessions"] if history_stats else 0,
+            "hours": round((history_stats["total_min"] if history_stats else 0) / 60, 1),
+            "avg_accuracy": round(history_stats["avg_acc"], 1) if history_stats and history_stats["avg_acc"] else 0
+        },
+        "recent_notes": [dict(n) for n in notes],
+        "bookmarks": [dict(b) for b in bookmarks],
+        "active_goals": [dict(g) for g in goals]
+    }
+
+# ════════════════════════════════════════════════════════════════════════════
+# END DATA PERSISTENCE
+# ════════════════════════════════════════════════════════════════════════════

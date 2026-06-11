@@ -191,6 +191,50 @@ def init_db():
             FOREIGN KEY (exam_id) REFERENCES exams(id),
             UNIQUE(exam_id, day_number)
         );
+    
+        CREATE TABLE IF NOT EXISTS user_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS bookmarks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            resource_type TEXT,
+            resource_title TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS study_history (
+            user_id INTEGER NOT NULL,
+            subject TEXT,
+            topic TEXT,
+            session_type TEXT,
+            duration_minutes INTEGER,
+            score INTEGER,
+            accuracy FLOAT,
+            date TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS user_goals (
+            user_id INTEGER NOT NULL,
+            goal_name TEXT NOT NULL,
+            target_value TEXT,
+            deadline TEXT,
+            progress INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'active',
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS user_preferences_extended (
+            user_id INTEGER PRIMARY KEY,
+            theme TEXT DEFAULT 'default',
+            dark_mode BOOLEAN DEFAULT TRUE,
+            notifications_enabled BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
     """)
     db.commit()
     db.close()
@@ -2188,1185 +2232,94 @@ def claim_referral_reward(req: dict, request: Request):
 # ════════════════════════════════════════════════════════════════════════════
 # END PHASE 4
 # ════════════════════════════════════════════════════════════════════════════
-# PHASE 5: ADAPTIVE INTELLIGENCE + MONETIZATION
-# Add these to server.py after Phase 4 endpoints
 
-# ════════════════════════════════════════════════════════════════════════════
-# PHASE 5: ADVANCED PERSONALIZATION & BUSINESS MODEL
-# ════════════════════════════════════════════════════════════════════════════
-
-# Add to init_db() - new tables:
-"""
-CREATE TABLE IF NOT EXISTS learning_profiles (
-    user_id INTEGER PRIMARY KEY,
-    learning_style TEXT,  -- visual, auditory, kinesthetic, reading
-    pace TEXT,  -- slow, normal, fast
-    preferred_subject TEXT,
-    difficulty_preference INTEGER (1-5),
-    study_pattern TEXT,  -- morning, evening, mixed
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS adaptive_paths (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    subject TEXT NOT NULL,
-    current_level INTEGER (1-10),
-    mastered_topics INTEGER DEFAULT 0,
-    total_topics INTEGER,
-    estimated_completion_days INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, subject)
-);
-
-CREATE TABLE IF NOT EXISTS skill_assessments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    skill_name TEXT,
-    proficiency_score FLOAT (0-100),
-    assessment_type TEXT,  -- quiz, mock, peer_review
-    assessed_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS study_analytics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    date TEXT,
-    topics_studied INTEGER,
-    quiz_accuracy FLOAT,
-    focus_session_count INTEGER,
-    streak_maintained BOOLEAN,
-    recommendations_followed BOOLEAN,
-    active_time_minutes INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    plan TEXT,  -- free, pro, premium
-    status TEXT,  -- active, cancelled, expired
-    started_at TEXT DEFAULT (datetime('now')),
-    expires_at TEXT,
-    auto_renew BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS premium_features (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    feature_name TEXT,  -- unlimited_mocks, ai_mentor, peer_tutor, interview_prep
-    unlocked_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, feature_name)
-);
-
-CREATE TABLE IF NOT EXISTS ai_mentor_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    subject TEXT,
-    topic TEXT,
-    question TEXT,
-    ai_response TEXT,
-    student_rating INTEGER (1-5),
-    session_duration_minutes INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS interview_prep_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    session_type TEXT,  -- behavioral, technical, coding
-    company TEXT,
-    question TEXT,
-    user_answer TEXT,
-    feedback TEXT,
-    score INTEGER (0-100),
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS peer_tutoring (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tutor_id INTEGER NOT NULL,
-    student_id INTEGER NOT NULL,
-    subject TEXT,
-    topic TEXT,
-    session_status TEXT,  -- requested, scheduled, completed, rated
-    scheduled_at TEXT,
-    completed_at TEXT,
-    student_rating INTEGER (1-5),
-    tutor_earnings FLOAT DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (tutor_id) REFERENCES users(id),
-    FOREIGN KEY (student_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS user_preferences (
-    user_id INTEGER PRIMARY KEY,
-    notifications_enabled BOOLEAN DEFAULT TRUE,
-    email_frequency TEXT,  -- daily, weekly, never
-    difficulty_auto_adjust BOOLEAN DEFAULT TRUE,
-    show_solutions_immediately BOOLEAN DEFAULT FALSE,
-    language TEXT DEFAULT 'en',
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-"""
-
-from datetime import datetime, timedelta
-import random
-
-# ── PHASE 5A: ADAPTIVE LEARNING PATHS ────────────────────────────────────
-
-@app.post("/learning/assess-style")
-def assess_learning_style(req: dict, request: Request):
-    """Quiz to determine learning style"""
-    user = require_user(request)
-    
-    # Simple assessment based on quiz answers
-    answers = req.get("answers", {})  # {q1: 'a', q2: 'b', ...}
-    
-    # Count answer patterns
-    style_map = {'a': 'visual', 'b': 'auditory', 'c': 'kinesthetic', 'd': 'reading'}
-    style = style_map.get(max(set(answers.values()), key=list(answers.values()).count), 'visual')
-    pace = 'fast' if len([a for a in answers.values() if a in ['a', 'b']]) > len(answers)/2 else 'normal'
-    
-    db = get_db()
-    db.execute("""
-        INSERT INTO learning_profiles (user_id, learning_style, pace)
-        VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET
-        learning_style=excluded.learning_style, pace=excluded.pace
-    """, (user["id"], style, pace))
-    db.commit()
-    db.close()
-    
-    return {"learning_style": style, "pace": pace, "message": f"You're a {style} learner who prefers {pace} pace"}
-
-@app.post("/adaptive-path/generate")
-def generate_adaptive_path(req: dict, request: Request):
-    """Generate personalized learning path based on goals"""
-    user = require_user(request)
-    subject = req.get("subject", "")
-    goal = req.get("goal", "")  # e.g., "master DSA in 30 days"
-    current_level = req.get("current_level", 3)
-    
-    gcl = get_groq(user)
-    
-    prompt = f"""Create a personalized learning path for this student:
-Subject: {subject}
-Goal: {goal}
-Current level: {current_level}/10
-Learning style preference: visual
-
-Generate a week-by-week breakdown:
-- Week 1: [Topics to cover]
-- Week 2: [Topics to cover]
-- Week 3: [Topics to cover]
-- Week 4: [Topics to cover]
-
-Include:
-1. Daily study schedule (topics + hours)
-2. Key concepts to master
-3. Practice exercises
-4. Milestones to hit
-5. Assessment checkpoints
-
-Format as structured JSON."""
-    
-    try:
-        resp = gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=1500
-        )
-        
-        path_data = resp.choices[0].message.content
-        
-        db = get_db()
-        db.execute("""
-            INSERT INTO adaptive_paths (user_id, subject, current_level, total_topics, estimated_completion_days)
-            VALUES(?,?,?,?,?) ON CONFLICT(user_id, subject) DO UPDATE SET
-            current_level=excluded.current_level
-        """, (user["id"], subject, current_level, 25, 28))
-        db.commit()
-        db.close()
-        
-        return {"path": path_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/adaptive-path/{subject}")
-def get_adaptive_path(subject: str, request: Request):
-    """Get user's personalized learning path"""
-    user = require_user(request)
-    
-    db = get_db()
-    path = db.execute(
-        "SELECT * FROM adaptive_paths WHERE user_id=? AND subject=?",
-        (user["id"], subject)
-    ).fetchone()
-    
-    profile = db.execute(
-        "SELECT * FROM learning_profiles WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    
-    db.close()
-    
-    if not path:
-        return {"error": "No path generated yet"}
-    
-    progress = (path["mastered_topics"] / max(1, path["total_topics"])) * 100
-    
-    return {
-        "subject": subject,
-        "level": path["current_level"],
-        "progress": progress,
-        "mastered": path["mastered_topics"],
-        "total": path["total_topics"],
-        "days_to_completion": path["estimated_completion_days"],
-        "learning_style": profile["learning_style"] if profile else "unknown"
-    }
-
-@app.post("/adaptive-path/adjust-difficulty")
-def adjust_difficulty_dynamically(req: dict, request: Request):
-    """Auto-adjust difficulty based on performance"""
-    user = require_user(request)
-    subject = req.get("subject", "")
-    recent_accuracy = req.get("accuracy", 0)  # 0-100
-    
-    db = get_db()
-    path = db.execute(
-        "SELECT * FROM adaptive_paths WHERE user_id=? AND subject=?",
-        (user["id"], subject)
-    ).fetchone()
-    
-    if not path:
-        return {"error": "No path found"}
-    
-    # Adjust level based on accuracy
-    if recent_accuracy >= 85:
-        new_level = min(10, path["current_level"] + 1)
-        recommendation = "Great job! Moving to harder topics"
-    elif recent_accuracy < 60:
-        new_level = max(1, path["current_level"] - 1)
-        recommendation = "Let's review basics before moving forward"
-    else:
-        new_level = path["current_level"]
-        recommendation = "Keep practicing at current level"
-    
-    db.execute(
-        "UPDATE adaptive_paths SET current_level=? WHERE user_id=? AND subject=?",
-        (new_level, user["id"], subject)
-    )
-    db.commit()
-    db.close()
-    
-    return {"new_level": new_level, "recommendation": recommendation}
-
-# ── PHASE 5B: AI MENTOR (Premium) ────────────────────────────────────────
-
-@app.post("/ai-mentor/ask")
-def ask_ai_mentor(req: dict, request: Request):
-    """Premium: Ask AI mentor for detailed explanations"""
-    user = require_user(request)
-    
-    # Check if user has premium
-    db = get_db()
-    sub = db.execute(
-        "SELECT plan FROM subscriptions WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    
-    if not sub or sub["plan"] == "free":
-        return {"error": "Premium feature. Upgrade to unlock", "upgrade_url": "/upgrade"}
-    
-    subject = req.get("subject", "")
-    topic = req.get("topic", "")
-    question = req.get("question", "")
-    
-    gcl = get_groq(user)
-    
-    prompt = f"""You are an expert AI mentor in {subject}.
-Student is learning about: {topic}
-Their question: {question}
-
-Provide:
-1. Clear, detailed explanation (tutor-level)
-2. Real-world example
-3. Common misconceptions students have
-4. Practice problem they should try
-5. Next concept to learn after mastering this
-
-Be encouraging and supportive."""
-    
-    try:
-        resp = gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=800
-        )
-        
-        answer = resp.choices[0].message.content
-        
-        # Log session
-        db.execute("""
-            INSERT INTO ai_mentor_sessions (user_id, subject, topic, question, ai_response)
-            VALUES(?,?,?,?,?)
-        """, (user["id"], subject, topic, question, answer))
-        db.commit()
-        db.close()
-        
-        return {"answer": answer}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ai-mentor/rate")
-def rate_mentor_response(req: dict, request: Request):
-    """Rate AI mentor's response"""
-    user = require_user(request)
-    session_id = req.get("session_id", 0)
-    rating = req.get("rating", 5)  # 1-5
-    
-    db = get_db()
-    db.execute(
-        "UPDATE ai_mentor_sessions SET student_rating=? WHERE id=? AND user_id=?",
-        (rating, session_id, user["id"])
-    )
-    db.commit()
-    db.close()
-    
-    return {"status": "rated"}
-
-# ── PHASE 5C: INTERVIEW PREP (Premium) ──────────────────────────────────
-
-@app.post("/interview-prep/start")
-def start_interview_session(req: dict, request: Request):
-    """Start mock interview session"""
-    user = require_user(request)
-    
-    db = get_db()
-    sub = db.execute(
-        "SELECT plan FROM subscriptions WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    
-    if not sub or sub["plan"] == "free":
-        return {"error": "Premium feature. Upgrade to unlock"}
-    
-    session_type = req.get("type", "behavioral")  # behavioral, technical, coding
-    company = req.get("company", "Google")
-    
-    gcl = get_groq(user)
-    
-    # Generate interview question
-    prompts = {
-        "behavioral": f"Generate a tough behavioral interview question for {company}. Format: QUESTION: [question]",
-        "technical": f"Generate a {company} technical interview question about system design. Format: QUESTION: [question]",
-        "coding": f"Generate a {company} coding interview question (LeetCode hard). Format: QUESTION: [question]"
-    }
-    
-    try:
-        resp = gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompts.get(session_type, prompts["behavioral"])}],
-            temperature=0.7,
-            max_tokens=300
-        )
-        
-        question = resp.choices[0].message.content
-        
-        db.execute("""
-            INSERT INTO interview_prep_sessions (user_id, session_type, company, question, session_status)
-            VALUES(?,?,?,?,?)
-        """, (user["id"], session_type, company, question, "started"))
-        
-        session = db.execute(
-            "SELECT id FROM interview_prep_sessions WHERE user_id=? ORDER BY id DESC LIMIT 1",
-            (user["id"],)
-        ).fetchone()
-        
-        db.commit()
-        db.close()
-        
-        return {"session_id": session["id"], "question": question}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/interview-prep/{session_id}/submit-answer")
-def submit_interview_answer(session_id: int, req: dict, request: Request):
-    """Submit answer and get feedback"""
-    user = require_user(request)
-    answer = req.get("answer", "")
-    
-    gcl = get_groq(user)
-    
-    db = get_db()
-    session = db.execute(
-        "SELECT * FROM interview_prep_sessions WHERE id=? AND user_id=?",
-        (session_id, user["id"])
-    ).fetchone()
-    
-    if not session:
-        return {"error": "Session not found"}
-    
-    prompt = f"""You are an expert interviewer. 
-Question: {session["question"]}
-Candidate's answer: {answer}
-
-Evaluate and provide:
-1. Score (0-100)
-2. Strengths
-3. Weaknesses
-4. How to improve
-5. Sample better answer
-
-Be honest but constructive."""
-    
-    try:
-        resp = gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=500
-        )
-        
-        feedback = resp.choices[0].message.content
-        score = random.randint(60, 95)  # Extract from feedback ideally
-        
-        db.execute("""
-            UPDATE interview_prep_sessions 
-            SET user_answer=?, feedback=?, score=?, session_status='completed'
-            WHERE id=?
-        """, (answer, feedback, score, session_id))
-        db.commit()
-        db.close()
-        
-        return {"score": score, "feedback": feedback}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ── PHASE 5D: PEER TUTORING MARKETPLACE ─────────────────────────────────
-
-@app.post("/tutoring/request")
-def request_tutor(req: dict, request: Request):
-    """Request a peer tutor"""
-    user = require_user(request)
-    subject = req.get("subject", "")
-    topic = req.get("topic", "")
-    
-    db = get_db()
-    
-    # Find tutors (users with high scores in this subject)
-    tutors = db.execute("""
-        SELECT u.id, u.name FROM users u
-        JOIN mock_exams m ON u.id = m.user_id
-        WHERE m.subject=? AND m.score > 80
-        LIMIT 5
-    """, (subject,)).fetchall()
-    
-    if not tutors:
-        return {"error": "No tutors available"}
-    
-    tutor = random.choice(tutors)
-    
-    db.execute("""
-        INSERT INTO peer_tutoring (tutor_id, student_id, subject, topic, session_status)
-        VALUES(?,?,?,?,?)
-    """, (tutor["id"], user["id"], subject, topic, "requested"))
-    
-    session = db.execute(
-        "SELECT id FROM peer_tutoring WHERE student_id=? ORDER BY id DESC LIMIT 1",
-        (user["id"],)
-    ).fetchone()
-    
-    db.commit()
-    db.close()
-    
-    return {
-        "tutor_name": tutor["name"],
-        "session_id": session["id"],
-        "message": f"Tutor {tutor['name']} has been matched! They'll respond soon."
-    }
-
-@app.get("/tutoring/sessions")
-def get_tutoring_sessions(request: Request):
-    """Get user's tutoring sessions (as tutor or student)"""
-    user = require_user(request)
-    
-    db = get_db()
-    
-    # Sessions as student
-    as_student = db.execute("""
-        SELECT p.*, u.name as tutor_name FROM peer_tutoring p
-        JOIN users u ON p.tutor_id = u.id
-        WHERE p.student_id=?
-        ORDER BY p.created_at DESC
-    """, (user["id"],)).fetchall()
-    
-    # Sessions as tutor
-    as_tutor = db.execute("""
-        SELECT p.*, u.name as student_name FROM peer_tutoring p
-        JOIN users u ON p.student_id = u.id
-        WHERE p.tutor_id=?
-        ORDER BY p.created_at DESC
-    """, (user["id"],)).fetchall()
-    
-    db.close()
-    
-    return {
-        "as_student": [dict(s) for s in as_student],
-        "as_tutor": [dict(s) for s in as_tutor]
-    }
-
-# ── PHASE 5E: MONETIZATION & SUBSCRIPTIONS ──────────────────────────────
-
-@app.get("/pricing")
-def get_pricing():
-    """Get pricing plans"""
-    return {
-        "plans": [
-            {
-                "name": "Free",
-                "price": 0,
-                "features": [
-                    "Spaced repetition",
-                    "Daily streaks",
-                    "Mock exams (3/month)",
-                    "Leaderboard",
-                    "Basic coaching"
-                ]
-            },
-            {
-                "name": "Pro",
-                "price": 99,  # ₹99/month
-                "features": [
-                    "Everything in Free",
-                    "Unlimited mock exams",
-                    "AI Mentor (10 questions/month)",
-                    "Advanced analytics",
-                    "Ad-free experience"
-                ]
-            },
-            {
-                "name": "Premium",
-                "price": 299,  # ₹299/month
-                "features": [
-                    "Everything in Pro",
-                    "Unlimited AI Mentor",
-                    "Interview prep (coding + behavioral)",
-                    "Peer tutoring (5 sessions/month)",
-                    "Priority support",
-                    "Certificate of completion"
-                ]
-            }
-        ]
-    }
-
-@app.post("/subscription/upgrade")
-def upgrade_subscription(req: dict, request: Request):
-    """Upgrade to paid plan"""
-    user = require_user(request)
-    plan = req.get("plan", "pro")  # pro, premium
-    
-    db = get_db()
-    
-    # Create/update subscription
-    expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-    
-    db.execute("""
-        INSERT INTO subscriptions (user_id, plan, status, expires_at)
-        VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
-        plan=excluded.plan, status='active', expires_at=excluded.expires_at
-    """, (user["id"], plan, "active", expires_at))
-    
-    # Unlock premium features
-    features = {
-        "pro": ["unlimited_mocks", "ai_mentor"],
-        "premium": ["unlimited_mocks", "ai_mentor", "interview_prep", "peer_tutor"]
-    }
-    
-    for feature in features.get(plan, []):
-        db.execute("""
-            INSERT OR IGNORE INTO premium_features (user_id, feature_name)
-            VALUES(?,?)
-        """, (user["id"], feature))
-    
-    db.commit()
-    db.close()
-    
-    return {
-        "status": "upgraded",
-        "plan": plan,
-        "expires_at": expires_at,
-        "message": f"Welcome to {plan.upper()}! Unlock all premium features."
-    }
-
-@app.get("/subscription/status")
-def get_subscription_status(request: Request):
-    """Get user's subscription status"""
-    user = require_user(request)
-    
-    db = get_db()
-    sub = db.execute(
-        "SELECT * FROM subscriptions WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    
-    features = db.execute(
-        "SELECT feature_name FROM premium_features WHERE user_id=?",
-        (user["id"],)
-    ).fetchall()
-    
-    db.close()
-    
-    if not sub:
-        return {
-            "plan": "free",
-            "status": "active",
-            "features": [],
-            "upgrade_url": "/pricing"
-        }
-    
-    return {
-        "plan": sub["plan"],
-        "status": sub["status"],
-        "expires_at": sub["expires_at"],
-        "features": [f["feature_name"] for f in features],
-        "days_left": max(0, (datetime.fromisoformat(sub["expires_at"]) - datetime.now()).days)
-    }
-
-# ── PHASE 5F: ANALYTICS & INSIGHTS ──────────────────────────────────────
-
-@app.get("/analytics/dashboard")
-def get_analytics_dashboard(request: Request):
-    """Get personalized learning analytics"""
-    user = require_user(request)
-    
-    db = get_db()
-    
-    # Get this month's data
-    month_start = (datetime.now().replace(day=1)).isoformat()
-    
-    analytics = db.execute("""
-        SELECT 
-            SUM(topics_studied) as total_topics,
-            AVG(quiz_accuracy) as avg_accuracy,
-            SUM(focus_session_count) as total_sessions,
-            SUM(active_time_minutes) as total_minutes
-        FROM study_analytics
-        WHERE user_id=? AND date >= ?
-    """, (user["id"], month_start)).fetchone()
-    
-    # Get skills
-    skills = db.execute("""
-        SELECT skill_name, proficiency_score
-        FROM skill_assessments
-        WHERE user_id=?
-        ORDER BY proficiency_score DESC
-        LIMIT 5
-    """, (user["id"],)).fetchall()
-    
-    db.close()
-    
-    return {
-        "this_month": {
-            "topics_studied": analytics["total_topics"] or 0,
-            "avg_accuracy": round(analytics["avg_accuracy"], 1) if analytics["avg_accuracy"] else 0,
-            "sessions": analytics["total_sessions"] or 0,
-            "hours_studied": (analytics["total_minutes"] or 0) / 60
-        },
-        "top_skills": [{"skill": s["skill_name"], "level": s["proficiency_score"]} for s in skills]
-    }
-
-# ════════════════════════════════════════════════════════════════════════════
-# END PHASE 5
-# ════════════════════════════════════════════════════════════════════════════
-# USER DATA PERSISTENCE
-# Add these to server.py after Phase 5 endpoints
-
-# ════════════════════════════════════════════════════════════════════════════
-# DATA PERSISTENCE: NOTES, BOOKMARKS, HISTORY, PREFERENCES
-# ════════════════════════════════════════════════════════════════════════════
-
-# Add to init_db() - new tables:
-"""
-CREATE TABLE IF NOT EXISTS user_notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT,
-    subject TEXT,
-    topic TEXT,
-    tags TEXT,  -- comma-separated
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    color TEXT DEFAULT '#4a5568',
-    pinned BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS bookmarks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    resource_type TEXT,  -- question, concept, video, article
-    resource_id TEXT,
-    resource_title TEXT,
-    resource_url TEXT,
-    subject TEXT,
-    topic TEXT,
-    notes TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS study_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    subject TEXT,
-    topic TEXT,
-    session_type TEXT,  -- quiz, mock, focus, coaching
-    duration_minutes INTEGER,
-    score INTEGER,
-    accuracy FLOAT,
-    completed BOOLEAN DEFAULT TRUE,
-    date TEXT DEFAULT (datetime('now')),
-    notes TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS user_goals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    goal_name TEXT NOT NULL,
-    goal_type TEXT,  -- exam, skill, subject_mastery, streak
-    target_value TEXT,  -- e.g., "score 90/100", "30-day streak"
-    deadline TEXT,
-    progress INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'active',  -- active, completed, abandoned
-    created_at TEXT DEFAULT (datetime('now')),
-    completed_at TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS user_preferences_extended (
-    user_id INTEGER PRIMARY KEY,
-    theme TEXT DEFAULT 'default',
-    sidebar_collapsed BOOLEAN DEFAULT FALSE,
-    notifications_enabled BOOLEAN DEFAULT TRUE,
-    notification_time TEXT DEFAULT '20:59',
-    dark_mode BOOLEAN DEFAULT TRUE,
-    language TEXT DEFAULT 'en',
-    focus_session_duration INTEGER DEFAULT 25,
-    break_duration INTEGER DEFAULT 5,
-    auto_save_enabled BOOLEAN DEFAULT TRUE,
-    last_active TEXT DEFAULT (datetime('now')),
-    last_sync TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS saved_searches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    query TEXT,
-    subject TEXT,
-    topic TEXT,
-    search_count INTEGER DEFAULT 1,
-    last_searched TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS user_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    subject TEXT,
-    total_hours_studied FLOAT DEFAULT 0,
-    topics_completed INTEGER DEFAULT 0,
-    topics_total INTEGER DEFAULT 0,
-    avg_accuracy FLOAT DEFAULT 0,
-    last_study_date TEXT,
-    next_review_date TEXT,
-    proficiency_level INTEGER DEFAULT 1,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, subject)
-);
-"""
-
-# ── NOTES: CREATE, READ, UPDATE, DELETE ────────────────────────────────────
+# ── PERSISTENCE ENDPOINTS ────────────────────────────────────────────
 
 @app.post("/notes/create")
 def create_note(req: dict, request: Request):
-    """Create a new note"""
     user = require_user(request)
-    
     db = get_db()
-    db.execute("""
-        INSERT INTO user_notes (user_id, title, content, subject, topic, tags, pinned)
-        VALUES(?,?,?,?,?,?,?)
-    """, (user["id"], req.get("title", "Untitled"), req.get("content", ""), 
-          req.get("subject", ""), req.get("topic", ""), req.get("tags", ""), 
-          req.get("pinned", False)))
-    
-    note = db.execute(
-        "SELECT id FROM user_notes WHERE user_id=? ORDER BY id DESC LIMIT 1",
-        (user["id"],)
-    ).fetchone()
-    
+    db.execute("""INSERT INTO user_notes (user_id, title, content) VALUES(?,?,?)""",
+               (user["id"], req.get("title", ""), req.get("content", "")))
     db.commit()
     db.close()
-    
-    return {"note_id": note["id"], "status": "created"}
+    return {"status": "created"}
 
 @app.get("/notes")
 def get_notes(request: Request):
-    """Get all user's notes"""
     user = require_user(request)
-    
     db = get_db()
-    notes = db.execute(
-        "SELECT * FROM user_notes WHERE user_id=? ORDER BY pinned DESC, updated_at DESC",
-        (user["id"],)
-    ).fetchall()
+    notes = db.execute("SELECT * FROM user_notes WHERE user_id=? ORDER BY created_at DESC", (user["id"],)).fetchall()
     db.close()
-    
     return {"notes": [dict(n) for n in notes]}
-
-@app.get("/notes/{note_id}")
-def get_note(note_id: int, request: Request):
-    """Get specific note"""
-    user = require_user(request)
-    
-    db = get_db()
-    note = db.execute(
-        "SELECT * FROM user_notes WHERE id=? AND user_id=?",
-        (note_id, user["id"])
-    ).fetchone()
-    db.close()
-    
-    if not note:
-        raise HTTPException(status_code=404)
-    
-    return dict(note)
-
-@app.post("/notes/{note_id}/update")
-def update_note(note_id: int, req: dict, request: Request):
-    """Update note"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute("""
-        UPDATE user_notes 
-        SET title=?, content=?, subject=?, topic=?, tags=?, pinned=?, updated_at=datetime('now')
-        WHERE id=? AND user_id=?
-    """, (req.get("title"), req.get("content"), req.get("subject", ""),
-          req.get("topic", ""), req.get("tags", ""), req.get("pinned", False),
-          note_id, user["id"]))
-    db.commit()
-    db.close()
-    
-    return {"status": "updated"}
-
-@app.delete("/notes/{note_id}")
-def delete_note(note_id: int, request: Request):
-    """Delete note"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute(
-        "DELETE FROM user_notes WHERE id=? AND user_id=?",
-        (note_id, user["id"])
-    )
-    db.commit()
-    db.close()
-    
-    return {"status": "deleted"}
-
-# ── BOOKMARKS ────────────────────────────────────────────────────────────
-
-@app.post("/bookmarks/add")
-def add_bookmark(req: dict, request: Request):
-    """Bookmark a resource"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute("""
-        INSERT INTO bookmarks (user_id, resource_type, resource_id, resource_title, resource_url, subject, topic, notes)
-        VALUES(?,?,?,?,?,?,?,?)
-    """, (user["id"], req.get("type", ""), req.get("resource_id", ""), req.get("title", ""),
-          req.get("url", ""), req.get("subject", ""), req.get("topic", ""), req.get("notes", "")))
-    db.commit()
-    db.close()
-    
-    return {"status": "bookmarked"}
 
 @app.get("/bookmarks")
 def get_bookmarks(request: Request):
-    """Get all bookmarks"""
     user = require_user(request)
-    
     db = get_db()
-    bookmarks = db.execute(
-        "SELECT * FROM bookmarks WHERE user_id=? ORDER BY created_at DESC",
-        (user["id"],)
-    ).fetchall()
+    bookmarks = db.execute("SELECT * FROM bookmarks WHERE user_id=? ORDER BY created_at DESC", (user["id"],)).fetchall()
     db.close()
-    
     return {"bookmarks": [dict(b) for b in bookmarks]}
 
-@app.delete("/bookmarks/{bookmark_id}")
-def remove_bookmark(bookmark_id: int, request: Request):
-    """Remove bookmark"""
+@app.post("/bookmarks/add")
+def add_bookmark(req: dict, request: Request):
     user = require_user(request)
-    
     db = get_db()
-    db.execute(
-        "DELETE FROM bookmarks WHERE id=? AND user_id=?",
-        (bookmark_id, user["id"])
-    )
+    db.execute("""INSERT INTO bookmarks (user_id, resource_type, resource_title) VALUES(?,?,?)""",
+               (user["id"], req.get("type", ""), req.get("title", "")))
     db.commit()
     db.close()
-    
-    return {"status": "removed"}
-
-# ── STUDY HISTORY ────────────────────────────────────────────────────────
-
-@app.post("/history/log")
-def log_study_session(req: dict, request: Request):
-    """Log a study session"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute("""
-        INSERT INTO study_history (user_id, subject, topic, session_type, duration_minutes, score, accuracy, notes)
-        VALUES(?,?,?,?,?,?,?,?)
-    """, (user["id"], req.get("subject", ""), req.get("topic", ""), req.get("type", ""),
-          req.get("duration", 0), req.get("score", 0), req.get("accuracy", 0), req.get("notes", "")))
-    db.commit()
-    db.close()
-    
-    return {"status": "logged"}
-
-@app.get("/history")
-def get_study_history(request: Request):
-    """Get study history (last 30 days)"""
-    user = require_user(request)
-    
-    db = get_db()
-    thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
-    
-    history = db.execute("""
-        SELECT * FROM study_history 
-        WHERE user_id=? AND date >= ?
-        ORDER BY date DESC
-        LIMIT 100
-    """, (user["id"], thirty_days_ago)).fetchall()
-    db.close()
-    
-    return {"history": [dict(h) for h in history]}
+    return {"status": "bookmarked"}
 
 @app.get("/history/stats")
 def get_history_stats(request: Request):
-    """Get study statistics"""
     user = require_user(request)
-    
     db = get_db()
-    
     stats = db.execute("""
-        SELECT 
-            COUNT(*) as total_sessions,
-            SUM(duration_minutes) as total_minutes,
-            AVG(accuracy) as avg_accuracy,
-            COUNT(DISTINCT subject) as subjects_studied,
-            COUNT(DISTINCT topic) as topics_studied,
-            MAX(date) as last_session
-        FROM study_history
-        WHERE user_id=?
-    """, (user["id"],)).fetchone()
-    
-    db.close()
-    
-    return {
-        "total_sessions": stats["total_sessions"] or 0,
-        "total_hours": round((stats["total_minutes"] or 0) / 60, 1),
-        "avg_accuracy": round(stats["avg_accuracy"], 1) if stats["avg_accuracy"] else 0,
-        "subjects": stats["subjects_studied"] or 0,
-        "topics": stats["topics_studied"] or 0,
-        "last_session": stats["last_session"]
-    }
-
-# ── GOALS ────────────────────────────────────────────────────────────────
-
-@app.post("/goals/create")
-def create_goal(req: dict, request: Request):
-    """Create a study goal"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute("""
-        INSERT INTO user_goals (user_id, goal_name, goal_type, target_value, deadline)
-        VALUES(?,?,?,?,?)
-    """, (user["id"], req.get("name", ""), req.get("type", ""), req.get("target", ""), req.get("deadline", "")))
-    
-    goal = db.execute(
-        "SELECT id FROM user_goals WHERE user_id=? ORDER BY id DESC LIMIT 1",
-        (user["id"],)
-    ).fetchone()
-    
-    db.commit()
-    db.close()
-    
-    return {"goal_id": goal["id"], "status": "created"}
-
-@app.get("/goals")
-def get_goals(request: Request):
-    """Get user's goals"""
-    user = require_user(request)
-    
-    db = get_db()
-    goals = db.execute(
-        "SELECT * FROM user_goals WHERE user_id=? AND status='active' ORDER BY deadline ASC",
-        (user["id"],)
-    ).fetchall()
-    db.close()
-    
-    return {"goals": [dict(g) for g in goals]}
-
-@app.post("/goals/{goal_id}/update-progress")
-def update_goal_progress(goal_id: int, req: dict, request: Request):
-    """Update goal progress"""
-    user = require_user(request)
-    progress = req.get("progress", 0)
-    
-    db = get_db()
-    db.execute(
-        "UPDATE user_goals SET progress=? WHERE id=? AND user_id=?",
-        (progress, goal_id, user["id"])
-    )
-    
-    if progress >= 100:
-        db.execute(
-            "UPDATE user_goals SET status='completed', completed_at=datetime('now') WHERE id=?",
-            (goal_id,)
-        )
-    
-    db.commit()
-    db.close()
-    
-    return {"status": "updated"}
-
-# ── USER PREFERENCES ─────────────────────────────────────────────────────
-
-@app.get("/preferences")
-def get_preferences(request: Request):
-    """Get user preferences"""
-    user = require_user(request)
-    
-    db = get_db()
-    prefs = db.execute(
-        "SELECT * FROM user_preferences_extended WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    db.close()
-    
-    if not prefs:
-        return {
-            "theme": "default",
-            "dark_mode": True,
-            "notifications": True,
-            "language": "en"
-        }
-    
-    return dict(prefs)
-
-@app.post("/preferences/update")
-def update_preferences(req: dict, request: Request):
-    """Update user preferences"""
-    user = require_user(request)
-    
-    db = get_db()
-    db.execute("""
-        INSERT INTO user_preferences_extended 
-        (user_id, theme, dark_mode, notifications_enabled, language, focus_session_duration, last_sync)
-        VALUES(?,?,?,?,?,?,datetime('now'))
-        ON CONFLICT(user_id) DO UPDATE SET
-        theme=excluded.theme,
-        dark_mode=excluded.dark_mode,
-        notifications_enabled=excluded.notifications_enabled,
-        language=excluded.language,
-        focus_session_duration=excluded.focus_session_duration,
-        last_sync=datetime('now')
-    """, (user["id"], req.get("theme", "default"), req.get("dark_mode", True),
-          req.get("notifications", True), req.get("language", "en"), 
-          req.get("focus_duration", 25)))
-    db.commit()
-    db.close()
-    
-    return {"status": "preferences_saved"}
-
-# ── DASHBOARD: ALL USER DATA ─────────────────────────────────────────────
-
-@app.get("/dashboard/complete")
-def get_complete_dashboard(request: Request):
-    """Get all user data for dashboard"""
-    user = require_user(request)
-    
-    db = get_db()
-    
-    # Get all data
-    notes = db.execute(
-        "SELECT id, title, updated_at FROM user_notes WHERE user_id=? ORDER BY updated_at DESC LIMIT 5",
-        (user["id"],)
-    ).fetchall()
-    
-    bookmarks = db.execute(
-        "SELECT id, resource_title FROM bookmarks WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
-        (user["id"],)
-    ).fetchall()
-    
-    goals = db.execute(
-        "SELECT id, goal_name, progress FROM user_goals WHERE user_id=? AND status='active'",
-        (user["id"],)
-    ).fetchall()
-    
-    streak = db.execute(
-        "SELECT current_streak, longest_streak FROM streaks WHERE user_id=?",
-        (user["id"],)
-    ).fetchone()
-    
-    history_stats = db.execute("""
         SELECT COUNT(*) as sessions, SUM(duration_minutes) as total_min, AVG(accuracy) as avg_acc
         FROM study_history WHERE user_id=?
     """, (user["id"],)).fetchone()
-    
     db.close()
-    
     return {
-        "profile": {
-            "name": user["name"],
-            "email": user["email"]
-        },
-        "streak": {
-            "current": streak["current_streak"] if streak else 0,
-            "longest": streak["longest_streak"] if streak else 0
-        },
-        "stats": {
-            "sessions": history_stats["sessions"] if history_stats else 0,
-            "hours": round((history_stats["total_min"] if history_stats else 0) / 60, 1),
-            "avg_accuracy": round(history_stats["avg_acc"], 1) if history_stats and history_stats["avg_acc"] else 0
-        },
-        "recent_notes": [dict(n) for n in notes],
-        "bookmarks": [dict(b) for b in bookmarks],
-        "active_goals": [dict(g) for g in goals]
+        "total_sessions": stats["sessions"] or 0,
+        "total_hours": round((stats["total_min"] or 0) / 60, 1),
+        "avg_accuracy": round(stats["avg_acc"], 1) if stats["avg_acc"] else 0
     }
 
-# ════════════════════════════════════════════════════════════════════════════
-# END DATA PERSISTENCE
-# ════════════════════════════════════════════════════════════════════════════
+@app.get("/goals")
+def get_goals(request: Request):
+    user = require_user(request)
+    db = get_db()
+    goals = db.execute("SELECT * FROM user_goals WHERE user_id=? AND status='active'", (user["id"],)).fetchall()
+    db.close()
+    return {"goals": [dict(g) for g in goals]}
+
+@app.post("/goals/create")
+def create_goal(req: dict, request: Request):
+    user = require_user(request)
+    db = get_db()
+    db.execute("""INSERT INTO user_goals (user_id, goal_name, target_value, deadline) VALUES(?,?,?,?)""",
+               (user["id"], req.get("name", ""), req.get("target", ""), req.get("deadline", "")))
+    db.commit()
+    db.close()
+    return {"status": "created"}
+
+@app.get("/preferences")
+def get_preferences(request: Request):
+    user = require_user(request)
+    db = get_db()
+    prefs = db.execute("SELECT * FROM user_preferences_extended WHERE user_id=?", (user["id"],)).fetchone()
+    db.close()
+    return dict(prefs) if prefs else {"theme": "default", "dark_mode": True}
+
+@app.post("/preferences/update")
+def update_preferences(req: dict, request: Request):
+    user = require_user(request)
+    db = get_db()
+    db.execute("""
+        INSERT INTO user_preferences_extended (user_id, theme, dark_mode) VALUES(?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET theme=excluded.theme, dark_mode=excluded.dark_mode
+    """, (user["id"], req.get("theme", "default"), req.get("dark_mode", True)))
+    db.commit()
+    db.close()
+    return {"status": "updated"}

@@ -609,285 +609,6 @@ body::after{content:'';position:fixed;inset:0;background:var(--web-overlay);poin
       <button onclick="openExamModal()" style="font-family:var(--mono);font-size:9px;padding:6px;border:1px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:3px;width:100%;letter-spacing:1px;">+ exam</button>
     </div>
 
-    <div><div class="section-label">📚 LEARNING PATH</div><button onclick="openGraphModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">VIEW PATH</button></div>
-    <div><div class="section-label">📝 MOCK EXAM</div><button onclick="openMockExamModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">+ START</button></div>
-    <div><div class="section-label">🎯 COACHING</div><div id="coaching-list" style="font-family:var(--mono);font-size:9px;text-align:center;">no patterns yet</div></div>
-    <div><div class="section-label">🎯 GOAL TODAY</div><div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span id="goal-status">0/60min</span><span id="goal-percent">0%</span></div><div style="width:100%;height:6px;background:var(--bg);border-radius:3px;"><div id="goal-bar" style="height:100%;width:0%;background:var(--accent);transition:width.3s;"></div></div></div></div>
-    <div><div class="section-label">🏆 LEADERBOARD</div><button onclick="openLeaderboardModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">SEE RANKINGS</button></div>
-    <div><div class="section-label">💡 RECOMMENDATIONS</div><button onclick="generateRecommendations()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">GENERATE</button></div>
-    <div><div class="section-label">🏅 BADGES</div><div id="badges-list" style="display:flex;flex-wrap:wrap;gap:4px;"><span style="font-size:9px;color:var(--text-dim);">none yet</span></div></div>
-    <div><div class="section-label">📤 SHARE</div><button onclick="openShareModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">SHARE</button></div>
-    <div><div class="section-label">🎯 CHALLENGE</div><button onclick="openChallengeModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">CHALLENGE</button></div>
-    <div><div class="section-label">🎁 REFER</div><button onclick="openReferralModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px dashed var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">EARN</button></div>
-    <div><div class="section-label">👥 FRIENDS</div><div id="friend-activity" style="font-family:var(--mono);font-size:8px;max-height:120px;overflow-y:auto;">loading...</div></div>
-
-<!-- PHASE 5 UI ADDITIONS
-Insert into index.html sidebar -->
-
-<!-- ADAPTIVE LEARNING PATH -->
-<div>
-  <div class="section-label">🎓 YOUR PATH</div>
-  <button onclick="openAdaptivePathModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
-    PERSONALIZED PLAN
-  </button>
-</div>
-
-<!-- AI MENTOR (Premium) -->
-<div>
-  <div class="section-label">🧠 AI MENTOR</div>
-  <button onclick="openAIMentorModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">
-    ASK MENTOR ★
-  </button>
-</div>
-
-<!-- INTERVIEW PREP (Premium) -->
-<div>
-  <div class="section-label">💼 INTERVIEW PREP</div>
-  <button onclick="openInterviewPrepModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:4px;width:100%;">
-    MOCK INTERVIEW ★
-  </button>
-</div>
-
-<!-- PEER TUTORING -->
-<div>
-  <div class="section-label">👨‍🏫 PEER TUTOR</div>
-  <button onclick="openPeerTutoringModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
-    REQUEST TUTOR
-  </button>
-</div>
-
-<!-- ANALYTICS -->
-<div>
-  <div class="section-label">📈 YOUR STATS</div>
-  <button onclick="openAnalyticsModal()" style="font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;width:100%;">
-    VIEW ANALYTICS
-  </button>
-</div>
-
-<!-- SUBSCRIPTION STATUS -->
-<div>
-  <div class="section-label">💎 PLAN</div>
-  <div id="subscription-status" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:9px;color:var(--text-dim);">
-    <div id="plan-name" style="color:var(--accent);margin-bottom:4px;">Free</div>
-    <button onclick="openPricingModal()" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:4px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">UPGRADE</button>
-  </div>
-</div>
-
-<!-- ADAPTIVE PATH MODAL -->
-<div id="adaptive-path-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎓 PERSONALIZED PATH</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="path-subject" type="text" placeholder="Subject (e.g., DSA)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <textarea id="path-goal" placeholder="Your goal (e.g., master DSA in 30 days)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:60px;resize:none;"></textarea>
-      <button onclick="generateAdaptivePath()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GENERATE PATH</button>
-      <button onclick="closeAdaptivePathModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- AI MENTOR MODAL -->
-<div id="ai-mentor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🧠 AI MENTOR ★</h2>
-    <div id="mentor-content" style="display:flex;flex-direction:column;gap:10px;">
-      <input id="mentor-subject" type="text" placeholder="Subject" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="mentor-topic" type="text" placeholder="Topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <textarea id="mentor-question" placeholder="Ask anything about this topic..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:80px;resize:none;"></textarea>
-      <button onclick="askAIMentor()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GET ANSWER</button>
-      <button onclick="closeAIMentorModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- INTERVIEW PREP MODAL -->
-<div id="interview-prep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">💼 INTERVIEW PREP ★</h2>
-    <div id="interview-content" style="display:flex;flex-direction:column;gap:10px;">
-      <select id="interview-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
-        <option value="behavioral">Behavioral</option>
-        <option value="technical">Technical</option>
-        <option value="coding">Coding</option>
-      </select>
-      <input id="interview-company" type="text" placeholder="Company (e.g., Google)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <div id="interview-question" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:10px;color:var(--accent);min-height:60px;">Generating question...</div>
-      <textarea id="interview-answer" placeholder="Your answer..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:100px;resize:none;"></textarea>
-      <button onclick="startInterviewSession()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">START INTERVIEW</button>
-      <button onclick="submitInterviewAnswer()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">SUBMIT & GET FEEDBACK</button>
-      <button onclick="closeInterviewPrepModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- PEER TUTORING MODAL -->
-<div id="peer-tutoring-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">👨‍🏫 PEER TUTORING</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="tutor-subject" type="text" placeholder="Subject you need help with" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="tutor-topic" type="text" placeholder="Specific topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <button onclick="requestTutor()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">FIND TUTOR</button>
-      <button onclick="closePeerTutoringModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- ANALYTICS MODAL -->
-<div id="analytics-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📈 YOUR ANALYTICS</h2>
-    <div id="analytics-content" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--mono);font-size:10px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Topics Studied</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-topics">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-accuracy">0%</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Sessions</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-sessions">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-hours">0</div>
-      </div>
-    </div>
-    <button onclick="closeAnalyticsModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-<!-- PRICING MODAL -->
-<div id="pricing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;overflow-y:auto;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;margin:20px auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:16px;text-align:center;">💎 CHOOSE YOUR PLAN</h2>
-    <div id="pricing-content" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:8px;font-weight:bold;">FREE</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Spaced Rep · Streaks · 3 Mocks · Leaderboard</div>
-        <button onclick="closeP ricingModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">CURRENT</button>
-      </div>
-      <div style="background:var(--surface2);border:2px solid var(--green);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-bottom:4px;font-weight:bold;">PRO</div>
-        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹99<span style="font-size:10px;">/mo</span></div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Unlimited Mocks · AI Mentor · No Ads</div>
-        <button onclick="upgradePlan('pro')" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PREMIUM</div>
-        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹299<span style="font-size:10px;">/mo</span></div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">+ Interview Prep · Peer Tutoring · Priority</div>
-        <button onclick="upgradePlan('premium')" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
-      </div>
-    </div>
-    <button onclick="closePricingModal()" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-
-
-<!-- PERSISTENCE UI ADDITIONS
-Insert into index.html sidebar -->
-
-<!-- NOTES WIDGET -->
-<div>
-  <div class="section-label">📝 MY NOTES</div>
-  <div style="display:flex;gap:4px;margin-bottom:8px;">
-    <input id="note-title" type="text" placeholder="Note title..." maxlength="50" style="flex:1;background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:6px;font-family:var(--mono);font-size:9px;border-radius:3px;outline:none;"/>
-    <button onclick="createNote()" style="background:var(--accent);border:none;color:var(--bg);padding:6px 10px;cursor:pointer;font-family:var(--mono);font-size:9px;border-radius:3px;font-weight:bold;">+</button>
-  </div>
-  <div id="notes-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;font-family:var(--mono);font-size:8px;">
-    <div style="text-align:center;color:var(--text-dim);padding:8px;">no notes yet</div>
-  </div>
-</div>
-
-<!-- BOOKMARKS WIDGET -->
-<div>
-  <div class="section-label">🔖 BOOKMARKS</div>
-  <div id="bookmarks-list" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;font-family:var(--mono);font-size:8px;">
-    <div style="text-align:center;color:var(--text-dim);padding:8px;">no bookmarks</div>
-  </div>
-</div>
-
-<!-- GOALS WIDGET -->
-<div>
-  <div class="section-label">🎯 MY GOALS</div>
-  <button onclick="openGoalsModal()" style="width:100%;font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;margin-bottom:8px;">+ ADD GOAL</button>
-  <div id="goals-list" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;">
-    <div style="text-align:center;color:var(--text-dim);padding:8px;font-size:9px;">no goals yet</div>
-  </div>
-</div>
-
-<!-- HISTORY WIDGET -->
-<div>
-  <div class="section-label">📊 STUDY STATS</div>
-  <button onclick="openHistoryModal()" style="width:100%;font-family:var(--mono);font-size:10px;padding:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;border-radius:4px;margin-bottom:8px;">VIEW HISTORY</button>
-  <div id="stats-summary" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;font-family:var(--mono);font-size:9px;color:var(--text-dim);">
-    <div>Sessions: <span id="stat-sessions">0</span></div>
-    <div>Hours: <span id="stat-hours">0</span>h</div>
-    <div>Accuracy: <span id="stat-accuracy">0</span>%</div>
-  </div>
-</div>
-
-<!-- NOTES MODAL -->
-<div id="notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📝 ALL NOTES</h2>
-    <div id="all-notes-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-      loading...
-    </div>
-    <button onclick="closeNotesModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-<!-- GOALS MODAL -->
-<div id="goals-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CREATE GOAL</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="goal-name" type="text" placeholder="Goal name" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <select id="goal-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
-        <option value="exam">Exam Prep</option>
-        <option value="skill">Skill Mastery</option>
-        <option value="streak">Streak</option>
-        <option value="subject">Subject Mastery</option>
-      </select>
-      <input id="goal-target" type="text" placeholder="Target (e.g., 90/100)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="goal-deadline" type="date" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <button onclick="addGoal()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">CREATE</button>
-      <button onclick="closeGoalsModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CANCEL</button>
-    </div>
-  </div>
-</div>
-
-<!-- HISTORY MODAL -->
-<div id="history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📊 STUDY HISTORY</h2>
-    <div id="history-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Total Sessions</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-sessions">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-hours">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-accuracy">0%</div>
-      </div>
-    </div>
-    <div id="history-list" style="display:flex;flex-direction:column;gap:6px;">
-      loading...
-    </div>
-    <button onclick="closeHistoryModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-
     </div>
   </aside>
 
@@ -1049,9 +770,9 @@ const THEMES={
   hawkeye:  {label:'🏹 HAWKEYE',    logoSub:'THE WORLD\'S BEST ARCHER',       color:'#9370DB'},
 };
 function setTheme(t){if(!THEMES[t])t="default";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("chotu-theme",t);const th=THEMES[t];document.getElementById("themeLabel").textContent=th.label;document.getElementById("logoSub").textContent=th.logoSub;document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===t));closeThemeGallery();}
-function openThemeGallery(){const saved=localStorage.getItem("chotu-theme")||"default";document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));document.getElementById("themeGallery").classList.add("open");}
-function closeThemeGallery(){const el=document.getElementById("themeGallery");if(el)el.classList.remove("open");}function openThemeGallery(){const el=document.getElementById("themeGallery");if(!el)return;const saved=localStorage.getItem("chotu-theme")||"default";el.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));el.classList.add("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
-document.addEventListener('click',e=>{if(!document.getElementById('themeDropdown').contains(e.target))closeThemeMenu();});
+function openThemeGallery(){const saved=localStorage.getItem("chotu-theme")||"default";document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));const tg=document.getElementById('themeGallery');if(tg)tg.classList.add('open');}
+function closeThemeGallery(){const el=document.getElementById("themeGallery");if(el)if(el)el.classList.remove('open');}function openThemeGallery(){const el=document.getElementById("themeGallery");if(!el)return;const saved=localStorage.getItem("chotu-theme")||"default";el.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));el.classList.add("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
+document.addEventListener('click',e=>{const td=document.getElementById('themeDropdown');if(td&&!td.contains(e.target))closeThemeMenu();});
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let chatHistory=[],focusTask=null,focusStart=null,timerInterval=null;
@@ -1106,7 +827,7 @@ function triggerIdle(){
   document.getElementById('idleQuoteText').textContent=`"${q.text}"`;
   document.getElementById('idleQuoteAttr').textContent=q.attr;
   document.getElementById('idleQuoteBlock').style.display='block';
-  document.getElementById('idleBanner').classList.add('visible');
+  const ib=document.getElementById('idleBanner');if(ib)ib.classList.add('visible');
 
   // chat message
   const msg=getIdleMsg(focusTask);
@@ -1421,7 +1142,7 @@ init();
     <!-- source toggle -->
     <div class="mp-source-toggle">
       <button class="mp-src-btn active" id="srcGenBtn" onclick="setSource('generated')">⚡ GENERATED</button>
-      <button class="mp-src-btn" id="srcYtBtn" onclick="openRandomYouTube()" style="cursor:pointer;">▶ YOUTUBE</button>
+      <button class="mp-src-btn" id="srcYtBtn"  onclick="openYT()">▶ YOUTUBE</button>
     </div>
     <!-- mood -->
     <div class="mp-moods">
@@ -1624,7 +1345,7 @@ function setVolume(val) {
   if (MP.gainNode) MP.gainNode.gain.value = MP.muted ? 0 : MP.volume / 100;
   // YouTube volume via postMessage
   const frame = document.getElementById('mpYtFrame');
-  if (false) {
+  if (MP.source === 'youtube' && MP.playing) {
     try { frame.contentWindow.postMessage(JSON.stringify({event:'command',func:'setVolume',args:[MP.volume]}), '*'); } catch(e) {}
   }
   document.getElementById('mpVolIcon') && (document.getElementById('mpVolIcon').textContent = MP.volume === 0 ? '🔇' : '🔊');
@@ -1968,282 +1689,30 @@ function closeExamModal(){document.getElementById('exam-modal').style.display='n
 async function createExam(){const name=document.getElementById('exam-name').value.trim();const subject=document.getElementById('exam-subject').value.trim();const date=document.getElementById('exam-date').value;const topics=document.getElementById('exam-topics').value.split(',').map(t=>t.trim()).filter(t=>t);if(!name||!subject||!date||!topics.length){alert('Fill all fields');return;}try{const res=await fetch('/exam/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exam_name:name,subject,exam_date:date,topics})});const data=await res.json();if(res.ok){appendMsg('assistant',`✅ Exam "${name}" created! ${data.days_left} days left.`);closeExamModal();loadMVPData();}}catch(e){console.error('Create exam error:',e);}}
 document.addEventListener('DOMContentLoaded',loadMVPData);
 setInterval(loadMVPData,5*60*1000);
-async function loadMVPData(){try{const s=await fetch('/streaks').then(r=>r.json());document.getElementById('streak-count').textContent=s.current_streak||0;document.getElementById('streak-best').textContent=s.longest_streak||0;const r=await fetch('/daily-report').then(r=>r.json());document.getElementById('today-minutes').textContent=r.minutes||0;document.getElementById('today-points').textContent=r.points||0;}catch(e){}}
-function openExamModal(){document.getElementById('exam-modal').style.display='flex';}
-function closeExamModal(){document.getElementById('exam-modal').style.display='none';}
-async function createExam(){const n=document.getElementById('exam-name').value.trim();const s=document.getElementById('exam-subject').value.trim();const d=document.getElementById('exam-date').value;const t=document.getElementById('exam-topics').value.split(',').map(x=>x.trim()).filter(x=>x);if(!n||!s||!d||!t.length){alert('Fill all');return;}try{const res=await fetch('/exam/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exam_name:n,subject:s,exam_date:d,topics:t})});if(res.ok){closeExamModal();loadMVPData();}}catch(e){}}
-function openGraphModal(){document.getElementById('graph-modal').style.display='flex';}
-function closeGraphModal(){document.getElementById('graph-modal').style.display='none';}
-function openMockExamModal(){document.getElementById('mock-exam-modal').style.display='flex';}
-function closeMockExamModal(){document.getElementById('mock-exam-modal').style.display='none';}
-async function startMockExam(){const s=document.getElementById('mock-subject').value.trim();if(!s){alert('Subject');return;}try{await fetch('/mock-exam/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,num_questions:10})});closeMockExamModal();}catch(e){}}
-async function loadDailyGoal(){try{const r=await fetch('/daily-goal/today').then(r=>r.json());document.getElementById('goal-bar').style.width=Math.min(100,r.progress_percent)+'%';document.getElementById('goal-status').textContent=r.completed_minutes+'/'+r.goal_minutes;document.getElementById('goal-percent').textContent=r.progress_percent+'%';}catch(e){}}
-function openLeaderboardModal(){document.getElementById('leaderboard-modal').style.display='block';loadLeaderboard();}
-function closeLeaderboardModal(){document.getElementById('leaderboard-modal').style.display='none';}
-async function loadLeaderboard(){try{const res=await fetch('/leaderboard/global').then(r=>r.json());const c=document.getElementById('leaderboard-content');c.innerHTML=res.leaderboard.slice(0,20).map((e,i)=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;display:flex;justify-content:space-between;"><span style="font-family:var(--mono);font-size:9px;color:var(--accent);">${i+1}. ${e.name}</span><span style="font-family:var(--mono);font-size:9px;">${e.points}</span></div>`).join('');}catch(e){}}
-async function generateRecommendations(){try{const res=await fetch('/recommendations/generate',{method:'POST',body:'{}'}).then(r=>r.json());document.getElementById('recommendations-content').textContent=res.recommendations;document.getElementById('recommendations-modal').style.display='flex';}catch(e){}}
-function closeRecommendationsModal(){document.getElementById('recommendations-modal').style.display='none';}
-async function loadBadges(){try{const res=await fetch('/badges').then(r=>r.json());const l=document.getElementById('badges-list');if(!res.badges||res.badges.length===0){l.innerHTML='none';return;}l.innerHTML=res.badges.map(b=>`<span style="font-size:16px;">${b.badge_icon}</span>`).join('');}catch(e){}}
-async function loadFriendActivity(){try{const res=await fetch('/friends/activity').then(r=>r.json());const f=document.getElementById('friend-activity');if(!res.activity||res.activity.length===0){f.innerHTML='no activity';return;}f.innerHTML=res.activity.map(a=>`<div style="background:var(--surface2);border:1px solid var(--border);padding:4px;border-radius:3px;font-size:8px;">${a.activity_type}</div>`).join('');}catch(e){}}
-function openShareModal(){alert('Share your score!');}
-function closeShareModal(){document.getElementById('share-modal').style.display='none';}
-function openChallengeModal(){document.getElementById('challenge-modal').style.display='flex';}
-function closeChallengeModal(){document.getElementById('challenge-modal').style.display='none';}
-async function createChallenge(){alert('Challenge created!');}
-function openReferralModal(){document.getElementById('referral-modal').style.display='flex';generateReferralLink();}
-function closeReferralModal(){document.getElementById('referral-modal').style.display='none';}
-async function generateReferralLink(){document.getElementById('referral-text').value='Join Chotu - AI Study OS: https://chotu-lcc7.onrender.com';}
-document.addEventListener('DOMContentLoaded',()=>{loadMVPData();loadDailyGoal();loadBadges();loadFriendActivity();setInterval(()=>{loadMVPData();loadDailyGoal();},5*60*1000);});
 
-<script>
-// PHASE 5 FUNCTIONS
+// YouTube playlist links
+const YT_LINKS = [
+  'https://youtu.be/NSislM08uWM',
+  'https://youtu.be/YIOoos_l5nQ',
+  'https://youtu.be/bcyvZIoQp9A',
+  'https://youtu.be/U5oshAjfEYY',
+  'https://youtu.be/WHqbqzqeskw',
+  'https://youtu.be/LQrKQVAQ_Q4',
+  'https://youtu.be/yiwlHutlxcI',
+  'https://youtu.be/NrMjwLKhGg4',
+  'https://youtu.be/WBKdhFLnKP0',
+  'https://youtu.be/pvRQNiU2ems',
+  'https://youtu.be/sd28J1M7vic',
+  'https://youtu.be/lfbLXnXGFCs',
+  'https://youtube.com/playlist?list=PLG2S0T09zD_knSKra-59QlHz8Hyt62ThA'
+];
 
-// Modals
-function openAdaptivePathModal(){document.getElementById('adaptive-path-modal').style.display='flex';}
-function closeAdaptivePathModal(){document.getElementById('adaptive-path-modal').style.display='none';}
-async function generateAdaptivePath(){const s=document.getElementById('path-subject').value;const g=document.getElementById('path-goal').value;if(!s||!g){alert('Fill all fields');return;}try{const res=await fetch('/adaptive-path/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,goal:g})}).then(r=>r.json());appendMsg('assistant',res.path);closeAdaptivePathModal();}catch(e){console.error('Error:',e);}}
-
-function openAIMentorModal(){document.getElementById('ai-mentor-modal').style.display='flex';}
-function closeAIMentorModal(){document.getElementById('ai-mentor-modal').style.display='none';}
-async function askAIMentor(){const s=document.getElementById('mentor-subject').value;const t=document.getElementById('mentor-topic').value;const q=document.getElementById('mentor-question').value;if(!s||!t||!q){alert('Fill all fields');return;}try{const res=await fetch('/ai-mentor/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,topic:t,question:q})}).then(r=>r.json());if(res.error){alert(res.error);return;}appendMsg('assistant','🧠 AI Mentor:\n\n'+res.answer);closeAIMentorModal();}catch(e){console.error('Error:',e);}}
-
-function openInterviewPrepModal(){document.getElementById('interview-prep-modal').style.display='flex';startInterviewSession();}
-function closeInterviewPrepModal(){document.getElementById('interview-prep-modal').style.display='none';}
-async function startInterviewSession(){const t=document.getElementById('interview-type').value;const c=document.getElementById('interview-company').value||'Google';try{const res=await fetch('/interview-prep/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:t,company:c})}).then(r=>r.json());if(res.error){alert(res.error);return;}document.getElementById('interview-question').textContent=res.question;document.getElementById('interview-answer').dataset.sessionId=res.session_id;}catch(e){console.error('Error:',e);}}
-async function submitInterviewAnswer(){const ans=document.getElementById('interview-answer').value;const sid=document.getElementById('interview-answer').dataset.sessionId;if(!ans||!sid){alert('Answer the question first');return;}try{const res=await fetch(`/interview-prep/${sid}/submit-answer`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer:ans})}).then(r=>r.json());appendMsg('assistant','💼 Interview Feedback:\n\nScore: '+res.score+'/100\n\n'+res.feedback);}catch(e){console.error('Error:',e);}}
-
-function openPeerTutoringModal(){document.getElementById('peer-tutoring-modal').style.display='flex';}
-function closePeerTutoringModal(){document.getElementById('peer-tutoring-modal').style.display='none';}
-async function requestTutor(){const s=document.getElementById('tutor-subject').value;const t=document.getElementById('tutor-topic').value;if(!s||!t){alert('Fill all fields');return;}try{const res=await fetch('/tutoring/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:s,topic:t})}).then(r=>r.json());if(res.error){alert(res.error);return;}appendMsg('assistant','👨‍🏫 Tutor matched:\n\n'+res.message);closePeerTutoringModal();}catch(e){console.error('Error:',e);}}
-
-function openAnalyticsModal(){document.getElementById('analytics-modal').style.display='flex';loadAnalytics();}
-function closeAnalyticsModal(){document.getElementById('analytics-modal').style.display='none';}
-async function loadAnalytics(){try{const res=await fetch('/analytics/dashboard').then(r=>r.json());document.getElementById('analytics-topics').textContent=res.this_month.topics_studied;document.getElementById('analytics-accuracy').textContent=res.this_month.avg_accuracy+'%';document.getElementById('analytics-sessions').textContent=res.this_month.sessions;document.getElementById('analytics-hours').textContent=res.this_month.hours_studied.toFixed(1);}catch(e){}}
-
-function openPricingModal(){document.getElementById('pricing-modal').style.display='flex';}
-function closePricingModal(){document.getElementById('pricing-modal').style.display='none';}
-async function upgradePlan(plan){try{const res=await fetch('/subscription/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan})}).then(r=>r.json());appendMsg('assistant','💎 Upgraded to '+plan+'!\n\n'+res.message);closePricingModal();loadSubscriptionStatus();}catch(e){console.error('Error:',e);}}
-
-async function loadSubscriptionStatus(){try{const res=await fetch('/subscription/status').then(r=>r.json());document.getElementById('plan-name').textContent=res.plan.toUpperCase();const btn=document.querySelector('#subscription-status button');if(res.plan==='free'){btn.style.background='var(--green)';btn.textContent='UPGRADE';}else{btn.style.background='var(--accent)';btn.textContent=res.days_left+' DAYS LEFT';}}catch(e){}}
-
-document.addEventListener('DOMContentLoaded',()=>{loadSubscriptionStatus();});
-</script>
-
-
-
-<script>
-// PERSISTENCE FUNCTIONS
-
-// Notes
-async function createNote(){const title=document.getElementById('note-title').value;if(!title.trim()){alert('Enter note title');return;}try{await fetch('/notes/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,content:''})});document.getElementById('note-title').value='';loadNotes();}catch(e){console.error('Note error:',e);}}
-async function loadNotes(){try{const res=await fetch('/notes').then(r=>r.json());const list=document.getElementById('notes-list');if(!res.notes||res.notes.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;">no notes</div>';return;}list.innerHTML=res.notes.slice(0,5).map(n=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;cursor:pointer;" onclick="editNote(${n.id})">${n.title.substring(0,30)}</div>`).join('');}catch(e){}}
-async function editNote(id){try{const note=await fetch(`/notes/${id}`).then(r=>r.json());const content=prompt('Edit note:',note.content);if(content!==null){await fetch(`/notes/${id}/update`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:note.title,content})});loadNotes();}}catch(e){}}
-
-// Bookmarks
-async function loadBookmarks(){try{const res=await fetch('/bookmarks').then(r=>r.json());const list=document.getElementById('bookmarks-list');if(!res.bookmarks||res.bookmarks.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;">no bookmarks</div>';return;}list.innerHTML=res.bookmarks.slice(0,3).map(b=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;font-size:8px;">${b.resource_title.substring(0,25)}</div>`).join('');}catch(e){}}
-
-// Goals
-function openGoalsModal(){document.getElementById('goals-modal').style.display='flex';}
-function closeGoalsModal(){document.getElementById('goals-modal').style.display='none';}
-async function addGoal(){const name=document.getElementById('goal-name').value;const type=document.getElementById('goal-type').value;const target=document.getElementById('goal-target').value;const deadline=document.getElementById('goal-deadline').value;if(!name||!target||!deadline){alert('Fill all fields');return;}try{await fetch('/goals/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,type,target,deadline})});document.getElementById('goal-name').value='';document.getElementById('goal-target').value='';closeGoalsModal();loadGoals();}catch(e){}}
-async function loadGoals(){try{const res=await fetch('/goals').then(r=>r.json());const list=document.getElementById('goals-list');if(!res.goals||res.goals.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:8px;font-size:9px;">no goals</div>';return;}list.innerHTML=res.goals.map(g=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px;"><div style="font-family:var(--mono);font-size:9px;color:var(--accent);">${g.goal_name}</div><div style="font-family:var(--mono);font-size:8px;color:var(--text-dim);">Progress: ${g.progress}%</div></div>`).join('');}catch(e){}}
-
-// History
-function openHistoryModal(){document.getElementById('history-modal').style.display='flex';loadHistoryStats();}
-function closeHistoryModal(){document.getElementById('history-modal').style.display='none';}
-async function loadHistoryStats(){try{const res=await fetch('/history/stats').then(r=>r.json());document.getElementById('hist-sessions').textContent=res.total_sessions;document.getElementById('hist-hours').textContent=res.total_hours;document.getElementById('hist-accuracy').textContent=res.avg_accuracy+'%';}catch(e){}}
-async function loadStatsSummary(){try{const res=await fetch('/history/stats').then(r=>r.json());document.getElementById('stat-sessions').textContent=res.total_sessions;document.getElementById('stat-hours').textContent=res.total_hours.toFixed(1);document.getElementById('stat-accuracy').textContent=Math.round(res.avg_accuracy);}catch(e){}}
-
-// Load all on page load
-document.addEventListener('DOMContentLoaded',()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();setInterval(()=>{loadNotes();loadBookmarks();loadGoals();loadStatsSummary();},10*60*1000);});
-</script>
-
-
-
-function openRandomYouTube() {
-  const randomLink = getRandomYouTubeLink();
-  window.open(randomLink, '_blank', 'noopener,noreferrer');
+function openYT() {
+  const url = YT_LINKS[Math.floor(Math.random() * YT_LINKS.length)];
+  window.open(url, '_blank');
 }
 
 </script>
-
-<div id="graph-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;width:90%;max-width:600px;"><div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin:0;">📚 PATH</h2><button onclick="closeGraphModal()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;">×</button></div><div id="graph-info" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">Topics connected by prerequisites</div></div></div>
-<div id="mock-exam-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📝 MOCK EXAM</h2><input id="mock-subject" placeholder="Subject" style="width:100%;background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;border-radius:4px;font-family:var(--mono);font-size:10px;margin-bottom:10px;outline:none;"/><button onclick="startMockExam()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">START</button><button onclick="closeMockExamModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
-<div id="leaderboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;"><div style="max-width:600px;margin:20px auto;background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:16px;"><div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin:0;">🏆 LEADERBOARD</h2><button onclick="closeLeaderboardModal()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;">×</button></div><div id="leaderboard-content" style="display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto;">loading...</div></div></div>
-<div id="recommendations-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">💡 TODAY'S PLAN</h2><div id="recommendations-content" style="font-family:var(--mono);font-size:10px;color:var(--text-hi);line-height:1.8;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px;height:150px;overflow-y:auto;">generating...</div><button onclick="closeRecommendationsModal()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">CLOSE</button></div></div>
-<div id="share-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📤 SHARE</h2><button onclick="openShareModal()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">SHARE SCORE</button><button onclick="closeShareModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
-<div id="challenge-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CHALLENGE</h2><input id="challenge-target" type="number" placeholder="Target" style="width:100%;background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;border-radius:4px;font-family:var(--mono);font-size:10px;margin-bottom:10px;outline:none;"/><button onclick="createChallenge()" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">CREATE</button><button onclick="closeChallengeModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
-<div id="referral-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;"><div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;"><h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🎁 REFER</h2><textarea id="referral-text" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:8px;color:var(--text-hi);font-family:var(--mono);font-size:9px;resize:none;margin-bottom:10px;" readonly></textarea><button onclick="generateReferralLink()" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;margin-bottom:8px;">GENERATE</button><button onclick="closeReferralModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button></div></div>
-
-<div id="adaptive-path-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎓 PERSONALIZED PATH</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="path-subject" type="text" placeholder="Subject (e.g., DSA)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <textarea id="path-goal" placeholder="Your goal (e.g., master DSA in 30 days)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:60px;resize:none;"></textarea>
-      <button onclick="generateAdaptivePath()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GENERATE PATH</button>
-      <button onclick="closeAdaptivePathModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- AI MENTOR MODAL -->
-<div id="ai-mentor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">🧠 AI MENTOR ★</h2>
-    <div id="mentor-content" style="display:flex;flex-direction:column;gap:10px;">
-      <input id="mentor-subject" type="text" placeholder="Subject" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="mentor-topic" type="text" placeholder="Topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <textarea id="mentor-question" placeholder="Ask anything about this topic..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:80px;resize:none;"></textarea>
-      <button onclick="askAIMentor()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">GET ANSWER</button>
-      <button onclick="closeAIMentorModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- INTERVIEW PREP MODAL -->
-<div id="interview-prep-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:550px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px;">💼 INTERVIEW PREP ★</h2>
-    <div id="interview-content" style="display:flex;flex-direction:column;gap:10px;">
-      <select id="interview-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
-        <option value="behavioral">Behavioral</option>
-        <option value="technical">Technical</option>
-        <option value="coding">Coding</option>
-      </select>
-      <input id="interview-company" type="text" placeholder="Company (e.g., Google)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <div id="interview-question" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:10px;color:var(--accent);min-height:60px;">Generating question...</div>
-      <textarea id="interview-answer" placeholder="Your answer..." style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;height:100px;resize:none;"></textarea>
-      <button onclick="startInterviewSession()" style="background:var(--green);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">START INTERVIEW</button>
-      <button onclick="submitInterviewAnswer()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">SUBMIT & GET FEEDBACK</button>
-      <button onclick="closeInterviewPrepModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- PEER TUTORING MODAL -->
-<div id="peer-tutoring-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">👨‍🏫 PEER TUTORING</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="tutor-subject" type="text" placeholder="Subject you need help with" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="tutor-topic" type="text" placeholder="Specific topic" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <button onclick="requestTutor()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">FIND TUTOR</button>
-      <button onclick="closePeerTutoringModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- ANALYTICS MODAL -->
-<div id="analytics-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📈 YOUR ANALYTICS</h2>
-    <div id="analytics-content" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--mono);font-size:10px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Topics Studied</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-topics">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-accuracy">0%</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Sessions</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-sessions">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;">
-        <div style="color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
-        <div style="color:var(--accent);font-size:18px;" id="analytics-hours">0</div>
-      </div>
-    </div>
-    <button onclick="closeAnalyticsModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-<!-- PRICING MODAL -->
-<div id="pricing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;overflow-y:auto;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;margin:20px auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:16px;text-align:center;">💎 CHOOSE YOUR PLAN</h2>
-    <div id="pricing-content" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:8px;font-weight:bold;">FREE</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Spaced Rep · Streaks · 3 Mocks · Leaderboard</div>
-        <button onclick="closeP ricingModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;">CURRENT</button>
-      </div>
-      <div style="background:var(--surface2);border:2px solid var(--green);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-bottom:4px;font-weight:bold;">PRO</div>
-        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹99<span style="font-size:10px;">/mo</span></div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Unlimited Mocks · AI Mentor · No Ads</div>
-        <button onclick="upgradePlan('pro')" style="width:100%;background:var(--green);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:bold;">PREMIUM</div>
-        <div style="font-family:var(--mono);font-size:14px;color:var(--accent);margin-bottom:8px;">₹299<span style="font-size:10px;">/mo</span></div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">+ Interview Prep · Peer Tutoring · Priority</div>
-        <button onclick="upgradePlan('premium')" style="width:100%;background:var(--accent);border:none;color:var(--bg);padding:6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:9px;font-weight:bold;">UPGRADE</button>
-      </div>
-    </div>
-    <button onclick="closePricingModal()" style="width:100%;margin-top:16px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-
-
-<div id="notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:600px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📝 ALL NOTES</h2>
-    <div id="all-notes-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-      loading...
-    </div>
-    <button onclick="closeNotesModal()" style="width:100%;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
-<!-- GOALS MODAL -->
-<div id="goals-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:500px;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">🎯 CREATE GOAL</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <input id="goal-name" type="text" placeholder="Goal name" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <select id="goal-type" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;">
-        <option value="exam">Exam Prep</option>
-        <option value="skill">Skill Mastery</option>
-        <option value="streak">Streak</option>
-        <option value="subject">Subject Mastery</option>
-      </select>
-      <input id="goal-target" type="text" placeholder="Target (e.g., 90/100)" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <input id="goal-deadline" type="date" style="background:var(--bg);border:1px solid var(--border-hi);color:var(--text-hi);padding:8px;font-family:var(--mono);font-size:10px;border-radius:4px;outline:none;"/>
-      <button onclick="addGoal()" style="background:var(--accent);border:none;color:var(--bg);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:bold;">CREATE</button>
-      <button onclick="closeGoalsModal()" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CANCEL</button>
-    </div>
-  </div>
-</div>
-
-<!-- HISTORY MODAL -->
-<div id="history-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;padding:20px;width:90%;max-width:700px;max-height:80vh;overflow-y:auto;">
-    <h2 style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:12px;">📊 STUDY HISTORY</h2>
-    <div id="history-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Total Sessions</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-sessions">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Hours Studied</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-hours">0</div>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center;">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;">Avg Accuracy</div>
-        <div style="font-family:var(--mono);font-size:16px;color:var(--accent);" id="hist-accuracy">0%</div>
-      </div>
-    </div>
-    <div id="history-list" style="display:flex;flex-direction:column;gap:6px;">
-      loading...
-    </div>
-    <button onclick="closeHistoryModal()" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);padding:8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">CLOSE</button>
-  </div>
-</div>
-
 
 </body>
 </html>

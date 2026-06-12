@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from groq import Groq
 import json, httpx, re, sqlite3, os, secrets
 from pathlib import Path
 from datetime import datetime, date, timedelta
@@ -522,7 +521,7 @@ async def chat(req: dict, request: Request):
     msgs.append({"role":"user","content":uc})
     
     try:
-        resp  = gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
+        resp  = # gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
         reply = resp.choices[0].message.content
         mem["history"].append({"role":"user","content":req.get("message",""),"ts":datetime.now().isoformat()})
         mem["history"].append({"role":"assistant","content":reply,"ts":datetime.now().isoformat()})
@@ -826,7 +825,7 @@ Strength: 0-1 (how strong is the relationship)
 """
     
     try:
-        resp = gcl.chat.completions.create(
+        resp = # gcl.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
@@ -1124,7 +1123,7 @@ Create a focused 2-minute lesson:
 Be direct, clear, and specific. No fluff."""
     
     try:
-        resp = gcl.chat.completions.create(
+        resp = # gcl.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -1559,7 +1558,7 @@ Format:
 Be concise and motivating. No fluff."""
     
     try:
-        resp = gcl.chat.completions.create(
+        resp = # gcl.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,

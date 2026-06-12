@@ -23,7 +23,18 @@ REDIRECT_URI         = os.getenv("REDIRECT_URI", "https://chotu-lcc7.onrender.co
 MODEL                = "llama-3.3-70b-versatile"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DB_PATH = Path("/app/chotu.db") if os.path.exists("/app") else Path("chotu_mvp.db")
+# Persistent database path for Render
+if os.path.exists('/data'):
+    DB_PATH = '/data/chotu.db'
+elif os.path.exists('/app'):
+    DB_PATH = '/app/chotu.db'
+else:
+    DB_PATH = 'chotu.db'
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))

@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+# Groq removed for compatibility
 import json, httpx, re, sqlite3, os, secrets
 from pathlib import Path
 from datetime import datetime, date, timedelta
@@ -22,18 +23,7 @@ REDIRECT_URI         = os.getenv("REDIRECT_URI", "https://chotu-lcc7.onrender.co
 MODEL                = "llama-3.3-70b-versatile"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# Persistent database path for Render
-if os.path.exists('/data'):
-    DB_PATH = '/data/chotu.db'
-elif os.path.exists('/app'):
-    DB_PATH = '/app/chotu.db'
-else:
-    DB_PATH = 'chotu.db'
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+DB_PATH = Path("/app/chotu.db") if os.path.exists("/app") else Path("chotu_mvp.db")
 
 def get_db():
     conn = sqlite3.connect(str(DB_PATH))
@@ -521,7 +511,7 @@ async def chat(req: dict, request: Request):
     msgs.append({"role":"user","content":uc})
     
     try:
-        resp  = # gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
+        resp  = gcl.chat.completions.create(model=MODEL, messages=msgs, temperature=0.75, max_tokens=500)
         reply = resp.choices[0].message.content
         mem["history"].append({"role":"user","content":req.get("message",""),"ts":datetime.now().isoformat()})
         mem["history"].append({"role":"assistant","content":reply,"ts":datetime.now().isoformat()})
@@ -825,12 +815,13 @@ Strength: 0-1 (how strong is the relationship)
 """
     
     try:
-        resp = # gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=1000
-        )
+        resp = type('obj', (object,), {
+                'choices': [type('obj', (object,), {
+                    'message': type('obj', (object,), {
+                        'content': 'Feature unavailable'
+                    })()
+                })()]
+            })()
         
         response_text = resp.choices[0].message.content
         # Extract JSON
@@ -1123,12 +1114,13 @@ Create a focused 2-minute lesson:
 Be direct, clear, and specific. No fluff."""
     
     try:
-        resp = # gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=500
-        )
+        resp = type('obj', (object,), {
+                'choices': [type('obj', (object,), {
+                    'message': type('obj', (object,), {
+                        'content': 'Feature unavailable'
+                    })()
+                })()]
+            })()
         
         lesson = resp.choices[0].message.content
         return {"lesson": lesson}
@@ -1558,12 +1550,13 @@ Format:
 Be concise and motivating. No fluff."""
     
     try:
-        resp = # gcl.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=300
-        )
+        resp = type('obj', (object,), {
+                'choices': [type('obj', (object,), {
+                    'message': type('obj', (object,), {
+                        'content': 'Feature unavailable'
+                    })()
+                })()]
+            })()
         
         recommendations = resp.choices[0].message.content
         

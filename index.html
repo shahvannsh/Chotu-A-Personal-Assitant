@@ -770,9 +770,9 @@ const THEMES={
   hawkeye:  {label:'🏹 HAWKEYE',    logoSub:'THE WORLD\'S BEST ARCHER',       color:'#9370DB'},
 };
 function setTheme(t){if(!THEMES[t])t="default";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("chotu-theme",t);const th=THEMES[t];document.getElementById("themeLabel").textContent=th.label;document.getElementById("logoSub").textContent=th.logoSub;document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===t));closeThemeGallery();}
-function openThemeGallery(){const saved=localStorage.getItem("chotu-theme")||"default";document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));const tg=document.getElementById('themeGallery');if(tg)tg.classList.add('open');}
-function closeThemeGallery(){const el=document.getElementById("themeGallery");if(el)if(el)el.classList.remove('open');}function openThemeGallery(){const el=document.getElementById("themeGallery");if(!el)return;const saved=localStorage.getItem("chotu-theme")||"default";el.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));el.classList.add("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
-document.addEventListener('click',e=>{const td=document.getElementById('themeDropdown');if(td&&!td.contains(e.target))closeThemeMenu();});
+function openThemeGallery(){const saved=localStorage.getItem("chotu-theme")||"default";document.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));document.getElementById("themeGallery").classList.add("open");}
+function closeThemeGallery(){const el=document.getElementById("themeGallery");if(el)el.classList.remove("open");}function openThemeGallery(){const el=document.getElementById("themeGallery");if(!el)return;const saved=localStorage.getItem("chotu-theme")||"default";el.querySelectorAll(".tg-card").forEach(c=>c.classList.toggle("active",c.dataset.theme===saved));el.classList.add("open");}function toggleThemeMenu(){}function closeThemeMenu(){}
+document.addEventListener('click',e=>{if(!document.getElementById('themeDropdown').contains(e.target))closeThemeMenu();});
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let chatHistory=[],focusTask=null,focusStart=null,timerInterval=null;
@@ -827,7 +827,7 @@ function triggerIdle(){
   document.getElementById('idleQuoteText').textContent=`"${q.text}"`;
   document.getElementById('idleQuoteAttr').textContent=q.attr;
   document.getElementById('idleQuoteBlock').style.display='block';
-  const ib=document.getElementById('idleBanner');if(ib)ib.classList.add('visible');
+  document.getElementById('idleBanner').classList.add('visible');
 
   // chat message
   const msg=getIdleMsg(focusTask);
@@ -1142,7 +1142,7 @@ init();
     <!-- source toggle -->
     <div class="mp-source-toggle">
       <button class="mp-src-btn active" id="srcGenBtn" onclick="setSource('generated')">⚡ GENERATED</button>
-      <button class="mp-src-btn" id="srcYtBtn"  onclick="openYT()">▶ YOUTUBE</button>
+      <button class="mp-src-btn" id="srcYtBtn"  onclick="setSource('youtube')">▶ YOUTUBE</button>
     </div>
     <!-- mood -->
     <div class="mp-moods">
@@ -1689,29 +1689,6 @@ function closeExamModal(){document.getElementById('exam-modal').style.display='n
 async function createExam(){const name=document.getElementById('exam-name').value.trim();const subject=document.getElementById('exam-subject').value.trim();const date=document.getElementById('exam-date').value;const topics=document.getElementById('exam-topics').value.split(',').map(t=>t.trim()).filter(t=>t);if(!name||!subject||!date||!topics.length){alert('Fill all fields');return;}try{const res=await fetch('/exam/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exam_name:name,subject,exam_date:date,topics})});const data=await res.json();if(res.ok){appendMsg('assistant',`✅ Exam "${name}" created! ${data.days_left} days left.`);closeExamModal();loadMVPData();}}catch(e){console.error('Create exam error:',e);}}
 document.addEventListener('DOMContentLoaded',loadMVPData);
 setInterval(loadMVPData,5*60*1000);
-
-// YouTube playlist links
-const YT_LINKS = [
-  'https://youtu.be/NSislM08uWM',
-  'https://youtu.be/YIOoos_l5nQ',
-  'https://youtu.be/bcyvZIoQp9A',
-  'https://youtu.be/U5oshAjfEYY',
-  'https://youtu.be/WHqbqzqeskw',
-  'https://youtu.be/LQrKQVAQ_Q4',
-  'https://youtu.be/yiwlHutlxcI',
-  'https://youtu.be/NrMjwLKhGg4',
-  'https://youtu.be/WBKdhFLnKP0',
-  'https://youtu.be/pvRQNiU2ems',
-  'https://youtu.be/sd28J1M7vic',
-  'https://youtu.be/lfbLXnXGFCs',
-  'https://youtube.com/playlist?list=PLG2S0T09zD_knSKra-59QlHz8Hyt62ThA'
-];
-
-function openYT() {
-  const url = YT_LINKS[Math.floor(Math.random() * YT_LINKS.length)];
-  window.open(url, '_blank');
-}
-
 </script>
 
 </body>

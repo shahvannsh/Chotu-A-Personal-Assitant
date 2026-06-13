@@ -1,0 +1,10 @@
+*.pyc
+__pycache__/
+.env
+.DS_Store
+*.db
+chotu.db
+/data/
+/venv/
+.vscode/
+*.log

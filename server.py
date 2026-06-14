@@ -8,46 +8,54 @@ import sqlite3
 from datetime import datetime, timedelta
 import secrets
 import logging
+from functools import lru_cache
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CHOTU", version="1.0.0")
 
-# CORS - FIXED: Restrict to specific origins
-ALLOWED_ORIGINS = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:8000,https://chotu-lcc7.onrender.com').split(',')
+# FIX #1: CORS - Restrict origins instead of allow-all
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "https://chotu-lcc7.onrender.com",
+    "https://chotu.onrender.com"
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
-# Database
+# Database configuration
 DB_PATH = '/data/chotu.db' if os.path.exists('/data') else 'chotu.db'
 
 def get_db():
     """Get database connection with PRAGMA enforcement"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    # FIXED: Enable foreign keys
+    # FIX #9: Enable foreign keys enforcement
     conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 def init_db():
-    """Initialize ALL tables for Phase 1-5"""
+    """Initialize database with all tables"""
     db = get_db()
     try:
         db.executescript("""
-        -- USERS & AUTH
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             google_id TEXT UNIQUE,
             email TEXT UNIQUE NOT NULL,
-            name TEXT,
+            name TEXT NOT NULL,
             picture TEXT,
             groq_key TEXT,
             created_at TEXT DEFAULT (datetime('now'))
@@ -58,10 +66,9 @@ def init_db():
             user_id INTEGER NOT NULL,
             expires_at TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
-        -- PHASE 1: CORE
         CREATE TABLE IF NOT EXISTS exams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -70,7 +77,7 @@ def init_db():
             exam_date TEXT NOT NULL,
             estimated_hours INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS exam_schedule (
@@ -79,7 +86,7 @@ def init_db():
             day_number INTEGER,
             date TEXT,
             topics TEXT,
-            hours_planned INTEGER,
+            hours_planned INTEGER DEFAULT 1,
             status TEXT DEFAULT 'pending',
             FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
         );
@@ -89,42 +96,41 @@ def init_db():
             current_streak INTEGER DEFAULT 0,
             longest_streak INTEGER DEFAULT 0,
             last_study_date TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS daily_study_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            study_date TEXT,
+            study_date TEXT NOT NULL,
             minutes_studied INTEGER DEFAULT 0,
             topics_reviewed TEXT,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS weak_topics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            subject TEXT,
-            topic TEXT,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
             confidence FLOAT DEFAULT 0.5,
             last_reviewed TEXT,
             next_review TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
-        -- PHASE 2: INTELLIGENCE
         CREATE TABLE IF NOT EXISTS mock_exams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            subject TEXT,
+            subject TEXT NOT NULL,
             exam_name TEXT,
-            total_questions INTEGER,
+            total_questions INTEGER DEFAULT 10,
             score INTEGER,
             accuracy FLOAT,
             time_taken_minutes INTEGER,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS quiz_questions (
@@ -134,7 +140,7 @@ def init_db():
             question TEXT,
             options TEXT,
             correct_answer TEXT,
-            difficulty INTEGER
+            difficulty INTEGER DEFAULT 1
         );
         
         CREATE TABLE IF NOT EXISTS quiz_attempts (
@@ -143,7 +149,7 @@ def init_db():
             question_id INTEGER,
             is_correct BOOLEAN,
             time_spent_seconds INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS student_mistakes (
@@ -153,7 +159,7 @@ def init_db():
             topic TEXT,
             mistake_pattern TEXT,
             frequency INTEGER DEFAULT 1,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS knowledge_graph (
@@ -165,7 +171,6 @@ def init_db():
             subject TEXT
         );
         
-        -- PHASE 3: HABITS
         CREATE TABLE IF NOT EXISTS daily_goals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -173,7 +178,7 @@ def init_db():
             goal_minutes INTEGER DEFAULT 60,
             completed_minutes INTEGER DEFAULT 0,
             UNIQUE(user_id, goal_date),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS leaderboard (
@@ -183,17 +188,17 @@ def init_db():
             total_points INTEGER DEFAULT 0,
             current_streak INTEGER DEFAULT 0,
             rank INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS user_badges (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            badge_name TEXT,
+            badge_name TEXT NOT NULL,
             badge_icon TEXT,
             earned_at TEXT DEFAULT (datetime('now')),
             UNIQUE(user_id, badge_name),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS daily_recommendations (
@@ -204,19 +209,18 @@ def init_db():
             topic TEXT,
             reason TEXT,
             UNIQUE(user_id, recommendation_date, topic),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
-        -- PHASE 4: DISTRIBUTION
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            title TEXT,
+            title TEXT NOT NULL,
             message TEXT,
             type TEXT,
             read BOOLEAN DEFAULT FALSE,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS challenges (
@@ -228,7 +232,7 @@ def init_db():
             participants TEXT,
             expires_at TEXT,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (creator_id) REFERENCES users(id)
+            FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS share_tokens (
@@ -239,7 +243,7 @@ def init_db():
             data TEXT,
             views INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS referrals (
@@ -248,7 +252,7 @@ def init_db():
             referred_id INTEGER,
             share_token TEXT,
             converted BOOLEAN DEFAULT FALSE,
-            FOREIGN KEY (referrer_id) REFERENCES users(id)
+            FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS friend_connections (
@@ -256,7 +260,7 @@ def init_db():
             user_id INTEGER NOT NULL,
             friend_id INTEGER NOT NULL,
             UNIQUE(user_id, friend_id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS friend_activity (
@@ -266,10 +270,9 @@ def init_db():
             subject TEXT,
             value TEXT,
             created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
-        -- PHASE 5: PREMIUM & PERSISTENCE
         CREATE TABLE IF NOT EXISTS user_notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -288,7 +291,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             resource_type TEXT,
-            resource_title TEXT,
+            resource_title TEXT NOT NULL,
             resource_url TEXT,
             subject TEXT,
             topic TEXT,
@@ -348,7 +351,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS premium_features (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            feature_name TEXT,
+            feature_name TEXT NOT NULL,
             unlocked_at TEXT DEFAULT (datetime('now')),
             UNIQUE(user_id, feature_name),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -397,7 +400,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS adaptive_paths (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            subject TEXT,
+            subject TEXT NOT NULL,
             current_level INTEGER DEFAULT 1,
             mastered_topics INTEGER DEFAULT 0,
             total_topics INTEGER,
@@ -426,38 +429,66 @@ def init_db():
     finally:
         db.close()
 
+# Initialize database on startup
 init_db()
 
-# Auth Helper - FIXED: Check token expiration
+# FIX #4: Input validation helper
+def validate_string(value, field_name, min_len=1, max_len=255):
+    """Validate string input"""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be string")
+    value = value.strip()
+    if len(value) < min_len or len(value) > max_len:
+        raise ValueError(f"{field_name} must be {min_len}-{max_len} characters")
+    return value
+
+def validate_email(email):
+    """Validate email format"""
+    email = email.strip().lower()
+    if '@' not in email or len(email) < 5:
+        raise ValueError("Invalid email format")
+    return email
+
+# FIX #4 & #5: Authentication with token expiration
 def require_user(request: Request):
-    """Validate user authentication with token expiration"""
-    token = request.headers.get('Authorization', '').replace('Bearer ', '')
-    if not token:
-        raise HTTPException(status_code=401, detail='No token provided')
-    
-    db = get_db()
+    """Validate user with token expiration check"""
     try:
-        session = db.execute('SELECT user_id, expires_at FROM sessions WHERE token=?', (token,)).fetchone()
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            raise HTTPException(status_code=401, detail='No token provided')
         
-        if not session:
-            raise HTTPException(status_code=401, detail='Invalid token')
-        
-        # FIXED: Check token expiration
-        if datetime.fromisoformat(session['expires_at']) < datetime.now():
-            db.execute('DELETE FROM sessions WHERE token=?', (token,))
-            db.commit()
-            raise HTTPException(status_code=401, detail='Token expired')
-        
-        user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
-        if not user:
-            raise HTTPException(status_code=401, detail='User not found')
-        
-        return dict(user)
-    finally:
-        db.close()
+        db = get_db()
+        try:
+            session = db.execute(
+                'SELECT user_id, expires_at FROM sessions WHERE token=?', 
+                (token,)
+            ).fetchone()
+            
+            if not session:
+                raise HTTPException(status_code=401, detail='Invalid token')
+            
+            # FIX #4: Check token expiration
+            expires_at = datetime.fromisoformat(session['expires_at'])
+            if expires_at < datetime.now():
+                db.execute('DELETE FROM sessions WHERE token=?', (token,))
+                db.commit()
+                raise HTTPException(status_code=401, detail='Token expired')
+            
+            user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
+            if not user:
+                raise HTTPException(status_code=401, detail='User not found')
+            
+            return dict(user)
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=500, detail='Authentication failed')
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STATIC & AUTH
+# AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get('/')
@@ -466,70 +497,64 @@ def index():
 
 @app.post('/auth/login')
 def login(req: dict):
-    """Login or register with email - FIXED: Token expiration"""
-    # FIXED: Input validation
-    email = req.get('email', '').strip()
-    name = req.get('name', 'User').strip()
-    
-    if not email or '@' not in email:
-        raise HTTPException(status_code=400, detail='Invalid email')
-    if len(name) == 0 or len(name) > 100:
-        raise HTTPException(status_code=400, detail='Invalid name')
-    
-    db = get_db()
+    """Login or register user"""
     try:
-        user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
-        if not user:
-            db.execute('INSERT INTO users (email, name) VALUES(?,?)', (email, name))
-            db.commit()
+        email = validate_email(req.get('email', ''))
+        name = validate_string(req.get('name', 'User'), 'name', min_len=1, max_len=100)
+        
+        db = get_db()
+        try:
             user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
-        
-        # FIXED: Token expiration (30 days)
-        token = secrets.token_urlsafe(32)
-        expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-        
-        # Delete old sessions
-        db.execute('DELETE FROM sessions WHERE user_id=? AND expires_at < ?',
-                  (user['id'], datetime.now().isoformat()))
-        
-        db.execute('INSERT INTO sessions (token, user_id, expires_at) VALUES(?,?,?)',
-                  (token, user['id'], expires_at))
-        db.commit()
-        
-        logger.info(f"User logged in: {email}")
-        return {'token': token, 'user': dict(user), 'expires_at': expires_at}
-    except HTTPException:
-        raise
+            if not user:
+                db.execute('INSERT INTO users (email, name) VALUES(?,?)', (email, name))
+                db.commit()
+                user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
+            
+            # FIX #4: Token with 30-day expiration
+            token = secrets.token_urlsafe(32)
+            expires_at = (datetime.now() + timedelta(days=30)).isoformat()
+            
+            db.execute('DELETE FROM sessions WHERE user_id=? AND expires_at < ?',
+                      (user['id'], datetime.now().isoformat()))
+            
+            db.execute('INSERT INTO sessions (token, user_id, expires_at) VALUES(?,?,?)',
+                      (token, user['id'], expires_at))
+            db.commit()
+            
+            logger.info(f"User login: {email}")
+            return {'token': token, 'user': dict(user), 'expires_at': expires_at}
+        finally:
+            db.close()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Login error: {e}")
         raise HTTPException(status_code=500, detail='Login failed')
-    finally:
-        db.close()
 
 @app.post('/auth/logout')
 def logout(request: Request):
-    """Logout - invalidate token"""
+    """Logout and invalidate token"""
     try:
         user = require_user(request)
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         
         db = get_db()
-        db.execute('DELETE FROM sessions WHERE token=?', (token,))
-        db.commit()
-        db.close()
-        
-        logger.info(f"User logged out: {user['email']}")
-        return {'status': 'logged out'}
+        try:
+            db.execute('DELETE FROM sessions WHERE token=?', (token,))
+            db.commit()
+            logger.info(f"User logout: {user['email']}")
+            return {'status': 'ok'}
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"Logout error: {e}")
         raise HTTPException(status_code=500, detail='Logout failed')
 
 @app.get('/auth/me')
 def get_me(request: Request):
+    """Get current user"""
     try:
         return require_user(request)
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Get user error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get user')
@@ -539,69 +564,66 @@ def health():
     return {'status': 'ok', 'version': '1.0.0'}
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 1: CORE
+# PHASE 1: EXAMS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.post('/exams/create')
 def create_exam(req: dict, request: Request):
-    """Create exam - FIXED: Validation + schedule creation"""
+    """Create exam with schedule"""
     try:
         user = require_user(request)
         
-        # FIXED: Input validation
-        exam_name = req.get('exam_name', '').strip()
-        subject = req.get('subject', '').strip()
-        exam_date = req.get('exam_date', '').strip()
-        estimated_hours = req.get('estimated_hours', 0)
-        
-        if not exam_name or len(exam_name) == 0:
-            raise HTTPException(status_code=400, detail='Exam name required')
-        if not subject or len(subject) == 0:
-            raise HTTPException(status_code=400, detail='Subject required')
-        if not exam_date:
-            raise HTTPException(status_code=400, detail='Exam date required')
+        exam_name = validate_string(req.get('exam_name', ''), 'exam_name')
+        subject = validate_string(req.get('subject', ''), 'subject')
+        exam_date = req.get('exam_date', '')
+        estimated_hours = max(0, min(1000, int(req.get('estimated_hours', 0))))
         
         try:
             exam_dt = datetime.fromisoformat(exam_date)
         except:
-            raise HTTPException(status_code=400, detail='Invalid date format')
-        
-        estimated_hours = max(0, min(int(estimated_hours or 0), 1000))
+            raise HTTPException(status_code=400, detail='Invalid exam_date format')
         
         db = get_db()
         try:
-            # Create exam
-            db.execute('INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(?,?,?,?,?)',
-                      (user['id'], exam_name, subject, exam_date, estimated_hours))
+            db.execute(
+                'INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(?,?,?,?,?)',
+                (user['id'], exam_name, subject, exam_date, estimated_hours)
+            )
             db.commit()
             
-            exam = db.execute('SELECT id FROM exams WHERE user_id=? AND exam_name=? ORDER BY created_at DESC LIMIT 1',
-                            (user['id'], exam_name)).fetchone()
+            exam = db.execute(
+                'SELECT id FROM exams WHERE user_id=? AND exam_name=? ORDER BY created_at DESC LIMIT 1',
+                (user['id'], exam_name)
+            ).fetchone()
             exam_id = exam['id']
             
-            # FIXED: Create exam schedule
+            # FIX #10: Create exam schedule
             today = datetime.now().date()
-            days_left = (exam_dt.date() - today).days
+            days_left = max(1, (exam_dt.date() - today).days)
             
-            for day in range(max(1, days_left)):
+            for day in range(days_left):
                 schedule_date = (today + timedelta(days=day)).isoformat()
-                db.execute('INSERT INTO exam_schedule (exam_id, day_number, date, hours_planned) VALUES(?,?,?,?)',
-                          (exam_id, day + 1, schedule_date, 1))
+                db.execute(
+                    'INSERT INTO exam_schedule (exam_id, day_number, date, hours_planned) VALUES(?,?,?,?)',
+                    (exam_id, day + 1, schedule_date, 1)
+                )
             
             db.commit()
-            logger.info(f"Exam created: {exam_name} by {user['email']}")
+            logger.info(f"Exam created: {exam_name}")
             return {'status': 'ok', 'exam_id': exam_id}
         finally:
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Create exam error: {e}")
         raise HTTPException(status_code=500, detail='Failed to create exam')
 
 @app.get('/exams')
 def get_exams(request: Request):
-    """Get user exams"""
+    """Get all exams"""
     try:
         user = require_user(request)
         db = get_db()
@@ -647,7 +669,7 @@ def update_exam(exam_id: int, req: dict, request: Request):
         subject = req.get('subject', '').strip()
         
         if exam_name and len(exam_name) == 0:
-            raise HTTPException(status_code=400, detail='Invalid exam name')
+            raise HTTPException(status_code=400, detail='Invalid exam_name')
         if subject and len(subject) == 0:
             raise HTTPException(status_code=400, detail='Invalid subject')
         
@@ -656,7 +678,6 @@ def update_exam(exam_id: int, req: dict, request: Request):
             db.execute('UPDATE exams SET exam_name=?, subject=? WHERE id=? AND user_id=?',
                       (exam_name or None, subject or None, exam_id, user['id']))
             db.commit()
-            logger.info(f"Exam updated: {exam_id}")
             return {'status': 'ok'}
         finally:
             db.close()
@@ -675,7 +696,6 @@ def delete_exam(exam_id: int, request: Request):
         try:
             db.execute('DELETE FROM exams WHERE id=? AND user_id=?', (exam_id, user['id']))
             db.commit()
-            logger.info(f"Exam deleted: {exam_id}")
             return {'status': 'ok'}
         finally:
             db.close()
@@ -685,9 +705,13 @@ def delete_exam(exam_id: int, request: Request):
         logger.error(f"Delete exam error: {e}")
         raise HTTPException(status_code=500, detail='Failed to delete exam')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 1: STREAKS
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.get('/streaks')
 def get_streaks(request: Request):
-    """Get streak count"""
+    """Get streak"""
     try:
         user = require_user(request)
         db = get_db()
@@ -704,7 +728,7 @@ def get_streaks(request: Request):
 
 @app.post('/streaks/log')
 def log_streak(request: Request):
-    """Log study day - FIXED: Race condition using INSERT OR REPLACE"""
+    """Log study day - FIX #1: Race condition"""
     try:
         user = require_user(request)
         today = datetime.now().date().isoformat()
@@ -714,7 +738,7 @@ def log_streak(request: Request):
             streak = db.execute('SELECT * FROM streaks WHERE user_id=?', (user['id'],)).fetchone()
             
             if not streak:
-                # FIXED: Use INSERT OR IGNORE to prevent duplicate on race condition
+                # FIX #1: Use INSERT OR IGNORE to prevent race condition
                 db.execute('INSERT OR IGNORE INTO streaks (user_id, current_streak, longest_streak, last_study_date) VALUES(?,?,?,?)',
                           (user['id'], 1, 1, today))
             else:
@@ -730,7 +754,6 @@ def log_streak(request: Request):
                               (new_current, new_longest, today, user['id']))
             
             db.commit()
-            logger.info(f"Streak logged for user: {user['id']}")
             return {'status': 'ok'}
         finally:
             db.close()
@@ -739,6 +762,10 @@ def log_streak(request: Request):
     except Exception as e:
         logger.error(f"Log streak error: {e}")
         raise HTTPException(status_code=500, detail='Failed to log streak')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 1: DAILY REPORT
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.get('/daily-report')
 def get_daily_report(request: Request):
@@ -767,7 +794,7 @@ def get_daily_report(request: Request):
         raise HTTPException(status_code=500, detail='Failed to get daily report')
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 2: INTELLIGENCE
+# PHASE 2: MOCK EXAMS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.post('/mock-exam/generate')
@@ -775,10 +802,7 @@ def gen_mock(req: dict, request: Request):
     """Generate mock exam"""
     try:
         user = require_user(request)
-        subject = req.get('subject', 'General').strip()
-        
-        if not subject:
-            raise HTTPException(status_code=400, detail='Subject required')
+        subject = validate_string(req.get('subject', 'General'), 'subject')
         
         db = get_db()
         try:
@@ -798,6 +822,8 @@ def gen_mock(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Generate mock error: {e}")
         raise HTTPException(status_code=500, detail='Failed to generate mock exam')
@@ -807,8 +833,8 @@ def submit_mock(exam_id: int, req: dict, request: Request):
     """Submit mock exam"""
     try:
         user = require_user(request)
-        score = req.get('score', 0)
-        accuracy = req.get('accuracy', 0)
+        score = max(0, min(100, int(req.get('score', 0))))
+        accuracy = max(0, min(100, int(req.get('accuracy', 0))))
         
         db = get_db()
         try:
@@ -825,12 +851,12 @@ def submit_mock(exam_id: int, req: dict, request: Request):
         raise HTTPException(status_code=500, detail='Failed to submit mock exam')
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 3: HABITS
+# PHASE 3: DAILY GOALS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get('/daily-goal')
 def get_goal(request: Request):
-    """Get daily goal - FIXED: Auto-create if not exists"""
+    """Get daily goal - FIX #11: Auto-create"""
     try:
         user = require_user(request)
         today = datetime.now().date().isoformat()
@@ -840,7 +866,7 @@ def get_goal(request: Request):
             goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
                              (user['id'], today)).fetchone()
             
-            # FIXED: Auto-create daily goal
+            # FIX #11: Auto-create daily goal
             if not goal:
                 db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(?,?,?,?)',
                           (user['id'], today, 60, 0))
@@ -889,6 +915,10 @@ def update_goal(req: dict, request: Request):
         logger.error(f"Update goal error: {e}")
         raise HTTPException(status_code=500, detail='Failed to update goal')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 3: LEADERBOARD
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.get('/leaderboard/global')
 def leaderboard():
     """Get global leaderboard"""
@@ -904,7 +934,7 @@ def leaderboard():
         raise HTTPException(status_code=500, detail='Failed to get leaderboard')
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 4: DISTRIBUTION
+# PHASE 4: NOTIFICATIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get('/notifications')
@@ -924,18 +954,19 @@ def notifs(request: Request):
         logger.error(f"Get notifications error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get notifications')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 4: CHALLENGES
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/challenges/create')
 def create_challenge(req: dict, request: Request):
     """Create challenge"""
     try:
         user = require_user(request)
         
-        challenge_type = req.get('type', '').strip()
-        subject = req.get('subject', '').strip()
-        target = req.get('target', 0)
-        
-        if not challenge_type or not subject:
-            raise HTTPException(status_code=400, detail='Type and subject required')
+        challenge_type = validate_string(req.get('type', ''), 'type', min_len=1)
+        subject = validate_string(req.get('subject', ''), 'subject', min_len=1)
+        target = max(0, int(req.get('target', 0)))
         
         db = get_db()
         try:
@@ -947,9 +978,15 @@ def create_challenge(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Create challenge error: {e}")
         raise HTTPException(status_code=500, detail='Failed to create challenge')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 4: FRIENDS
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.post('/friends/connect')
 def connect(req: dict, request: Request):
@@ -959,7 +996,10 @@ def connect(req: dict, request: Request):
         friend_id = req.get('friend_id')
         
         if not friend_id:
-            raise HTTPException(status_code=400, detail='Friend ID required')
+            raise HTTPException(status_code=400, detail='friend_id required')
+        
+        if friend_id == user['id']:
+            raise HTTPException(status_code=400, detail='Cannot add yourself')
         
         db = get_db()
         try:
@@ -976,7 +1016,7 @@ def connect(req: dict, request: Request):
         raise HTTPException(status_code=500, detail='Failed to connect friend')
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PHASE 5: PREMIUM & PERSISTENCE
+# PHASE 5: NOTES
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.post('/notes/create')
@@ -985,11 +1025,8 @@ def note_create(req: dict, request: Request):
     try:
         user = require_user(request)
         
-        title = req.get('title', '').strip()
+        title = validate_string(req.get('title', ''), 'title')
         content = req.get('content', '').strip()
-        
-        if not title:
-            raise HTTPException(status_code=400, detail='Title required')
         
         db = get_db()
         try:
@@ -1003,6 +1040,8 @@ def note_create(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Create note error: {e}")
         raise HTTPException(status_code=500, detail='Failed to create note')
@@ -1036,7 +1075,6 @@ def update_note(note_id: int, req: dict, request: Request):
             db.execute('UPDATE user_notes SET content=?, updated_at=datetime("now") WHERE id=? AND user_id=?',
                       (content, note_id, user['id']))
             db.commit()
-            logger.info(f"Note updated: {note_id}")
             return {'status': 'ok'}
         finally:
             db.close()
@@ -1055,7 +1093,6 @@ def delete_note(note_id: int, request: Request):
         try:
             db.execute('DELETE FROM user_notes WHERE id=? AND user_id=?', (note_id, user['id']))
             db.commit()
-            logger.info(f"Note deleted: {note_id}")
             return {'status': 'ok'}
         finally:
             db.close()
@@ -1065,18 +1102,19 @@ def delete_note(note_id: int, request: Request):
         logger.error(f"Delete note error: {e}")
         raise HTTPException(status_code=500, detail='Failed to delete note')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: BOOKMARKS
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/bookmarks/add')
 def bookmark_add(req: dict, request: Request):
     """Add bookmark"""
     try:
         user = require_user(request)
         
-        title = req.get('title', '').strip()
-        url = req.get('url', '').strip()
+        title = validate_string(req.get('title', ''), 'title')
+        url = validate_string(req.get('url', ''), 'url', min_len=5)
         res_type = req.get('type', 'link').strip()
-        
-        if not title or not url:
-            raise HTTPException(status_code=400, detail='Title and URL required')
         
         db = get_db()
         try:
@@ -1088,6 +1126,8 @@ def bookmark_add(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Add bookmark error: {e}")
         raise HTTPException(status_code=500, detail='Failed to add bookmark')
@@ -1099,7 +1139,7 @@ def bookmarks_get(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            b = db.execute('SELECT * FROM bookmarks WHERE user_id=?', (user['id'],)).fetchall()
+            b = db.execute('SELECT * FROM bookmarks WHERE user_id=? ORDER BY created_at DESC', (user['id'],)).fetchall()
             return {'bookmarks': [dict(x) for x in b]}
         finally:
             db.close()
@@ -1109,27 +1149,33 @@ def bookmarks_get(request: Request):
         logger.error(f"Get bookmarks error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get bookmarks')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: STUDY HISTORY
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/study/log')
 def study_log(req: dict, request: Request):
-    """Log study session - FIXED: Validates all fields"""
+    """Log study session - FIX #2: Logs all sessions"""
     try:
         user = require_user(request)
         
-        subject = req.get('subject', 'General').strip()
-        duration = max(0, int(req.get('duration', 0)))
+        subject = validate_string(req.get('subject', 'General'), 'subject', min_len=1)
+        duration = max(1, int(req.get('duration', 0)))
         accuracy = max(0, min(100, int(req.get('accuracy', 0))))
         
         db = get_db()
         try:
-            db.execute('INSERT INTO study_history (user_id, subject, duration_minutes, accuracy) VALUES(?,?,?,?)',
-                      (user['id'], subject, duration, accuracy))
+            db.execute('INSERT INTO study_history (user_id, subject, duration_minutes, accuracy, session_type) VALUES(?,?,?,?,?)',
+                      (user['id'], subject, duration, accuracy, 'study'))
             db.commit()
-            logger.info(f"Study session logged: {subject} - {duration} min")
+            logger.info(f"Study logged: {subject} - {duration} min")
             return {'status': 'ok'}
         finally:
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Log study error: {e}")
         raise HTTPException(status_code=500, detail='Failed to log study session')
@@ -1141,7 +1187,7 @@ def history_get(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            h = db.execute('SELECT * FROM study_history WHERE user_id=? ORDER BY date DESC LIMIT 50', (user['id'],)).fetchall()
+            h = db.execute('SELECT * FROM study_history WHERE user_id=? ORDER BY date DESC LIMIT 100', (user['id'],)).fetchall()
             return {'history': [dict(x) for x in h]}
         finally:
             db.close()
@@ -1151,15 +1197,17 @@ def history_get(request: Request):
         logger.error(f"Get history error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get history')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: GOALS
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/goals/create')
 def goal_create(req: dict, request: Request):
-    """Create personal goal"""
+    """Create goal"""
     try:
         user = require_user(request)
         
-        name = req.get('name', '').strip()
-        if not name:
-            raise HTTPException(status_code=400, detail='Goal name required')
+        name = validate_string(req.get('name', ''), 'name')
         
         db = get_db()
         try:
@@ -1171,6 +1219,8 @@ def goal_create(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Create goal error: {e}")
         raise HTTPException(status_code=500, detail='Failed to create goal')
@@ -1192,6 +1242,10 @@ def goals_get(request: Request):
         logger.error(f"Get goals error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get goals')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: AI MENTOR (Premium)
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/ai-mentor/ask')
 def mentor_ask(req: dict, request: Request):
     """Ask AI mentor"""
@@ -1205,14 +1259,11 @@ def mentor_ask(req: dict, request: Request):
             if not sub or sub['plan'] == 'free':
                 raise HTTPException(status_code=403, detail='Premium feature required')
             
-            subject = req.get('subject', '').strip()
-            topic = req.get('topic', '').strip()
-            question = req.get('question', '').strip()
+            subject = validate_string(req.get('subject', ''), 'subject', min_len=1)
+            topic = validate_string(req.get('topic', ''), 'topic', min_len=1)
+            question = validate_string(req.get('question', ''), 'question', min_len=1)
             
-            if not subject or not topic or not question:
-                raise HTTPException(status_code=400, detail='All fields required')
-            
-            answer = f"Comprehensive explanation of {topic} in {subject}: This requires understanding of fundamental concepts..."
+            answer = f"Comprehensive explanation of {topic} in {subject}: This requires deep understanding of foundational concepts and their applications."
             
             db.execute('INSERT INTO ai_mentor_sessions (user_id, subject, topic, question, ai_response) VALUES(?,?,?,?,?)',
                       (user['id'], subject, topic, question, answer))
@@ -1223,9 +1274,15 @@ def mentor_ask(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Mentor ask error: {e}")
         raise HTTPException(status_code=500, detail='Failed to get AI response')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: INTERVIEW PREP (Premium)
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.post('/interview-prep/start')
 def interview_start(req: dict, request: Request):
@@ -1240,7 +1297,7 @@ def interview_start(req: dict, request: Request):
             if not sub or sub['plan'] == 'free':
                 raise HTTPException(status_code=403, detail='Premium feature required')
             
-            company = req.get('company', 'Google').strip()
+            company = validate_string(req.get('company', 'Google'), 'company', min_len=1)
             session_type = req.get('type', 'behavioral').strip()
             
             questions = {
@@ -1261,6 +1318,8 @@ def interview_start(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Interview start error: {e}")
         raise HTTPException(status_code=500, detail='Failed to start interview prep')
@@ -1270,24 +1329,27 @@ def interview_submit(session_id: int, req: dict, request: Request):
     """Submit interview response"""
     try:
         user = require_user(request)
-        answer = req.get('answer', '').strip()
-        
-        if not answer:
-            raise HTTPException(status_code=400, detail='Answer required')
+        answer = validate_string(req.get('answer', ''), 'answer', min_len=1)
         
         db = get_db()
         try:
             db.execute('UPDATE interview_prep_sessions SET user_answer=?, feedback=?, score=? WHERE id=? AND user_id=?',
-                      (answer, 'Great response! Strong technical knowledge.', 85, session_id, user['id']))
+                      (answer, 'Great response! Strong technical knowledge demonstrated.', 85, session_id, user['id']))
             db.commit()
-            return {'score': 85, 'feedback': 'Great response! Strong technical knowledge.'}
+            return {'score': 85, 'feedback': 'Great response! Strong technical knowledge demonstrated.'}
         finally:
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Interview submit error: {e}")
         raise HTTPException(status_code=500, detail='Failed to submit interview response')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: SUBSCRIPTIONS
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.get('/subscription/status')
 def sub_status(request: Request):
@@ -1332,12 +1394,16 @@ def sub_upgrade(req: dict, request: Request):
         logger.error(f"Upgrade subscription error: {e}")
         raise HTTPException(status_code=500, detail='Failed to upgrade subscription')
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: FOCUS SESSIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post('/focus-session/start')
 def focus_start(req: dict, request: Request):
     """Start focus session"""
     try:
         user = require_user(request)
-        subject = req.get('subject', 'General').strip()
+        subject = validate_string(req.get('subject', 'General'), 'subject', min_len=1)
         duration = max(1, min(120, int(req.get('duration', 25))))
         
         db = get_db()
@@ -1351,31 +1417,31 @@ def focus_start(req: dict, request: Request):
             db.close()
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Start focus error: {e}")
         raise HTTPException(status_code=500, detail='Failed to start focus session')
 
 @app.post('/focus-session/{session_id}/end')
 def focus_end(session_id: int, req: dict, request: Request):
-    """End focus session - FIXED: Logs to study_history"""
+    """End focus session - FIX #2: Logs to study_history"""
     try:
         user = require_user(request)
         duration = max(1, int(req.get('duration', 25)))
         
         db = get_db()
         try:
-            # Get focus session details
             session = db.execute('SELECT * FROM focus_sessions WHERE id=? AND user_id=?',
                                (session_id, user['id'])).fetchone()
             
             if not session:
                 raise HTTPException(status_code=404, detail='Session not found')
             
-            # Mark as completed
             db.execute('UPDATE focus_sessions SET completed=TRUE, ended_at=datetime("now") WHERE id=? AND user_id=?',
                       (session_id, user['id']))
             
-            # FIXED: Log to study_history
+            # FIX #2: Log to study_history
             db.execute('INSERT INTO study_history (user_id, subject, session_type, duration_minutes) VALUES(?,?,?,?)',
                       (user['id'], session['subject'], 'focus', duration))
             

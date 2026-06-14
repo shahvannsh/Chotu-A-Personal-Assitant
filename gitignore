@@ -8,3 +8,4 @@ chotu.db
 /venv/
 .vscode/
 *.log
+.idea/

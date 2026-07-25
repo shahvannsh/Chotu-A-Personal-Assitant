@@ -1011,19 +1011,27 @@ def chat_ask(req: dict, request: Request):
             except:
                 pass
             
-            answer = "Based on your study materials: " + (context[:500] if context else "Study this topic more.")
-            
+            answer = None
+
             if GROQ_API_KEY:
                 try:
                     from groq import Groq
                     client = Groq(api_key=GROQ_API_KEY)
                     prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
-                    response = client.chat.completions.create(model="mixtral-8x7b-32768",
+                    response = client.chat.completions.create(model="llama-3.3-70b-versatile",
                                                              messages=[{"role": "user", "content": prompt}],
                                                              max_tokens=500, temperature=0.7)
                     answer = response.choices[0].message.content
-                except:
-                    pass
+                except Exception as e:
+                    logger.error(f"Groq call failed: {e}")
+
+            if answer is None:
+                if not GROQ_API_KEY:
+                    answer = "I can't reach the AI backend right now — GROQ_API_KEY isn't set on the server. Ask whoever runs this to add it."
+                elif context:
+                    answer = "I hit an error calling the AI model, but here's what I found in your materials:\n\n" + context[:500]
+                else:
+                    answer = "I hit an error calling the AI model and don't have any study materials uploaded for this yet. Try again in a moment, or upload a relevant PDF."
             
             db.execute('''INSERT INTO chat_history (user_id, question, answer, relevant_chunks, relevance_score, confidence)
                          VALUES(?,?,?,?,?,?)''',

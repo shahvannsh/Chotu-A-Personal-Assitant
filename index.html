@@ -618,7 +618,7 @@
     <div class="chat-header">
       <div>
         <div class="chat-title">📚 Physics Help</div>
-        <div class="chat-title-sub">Powered by Advanced AI with 92% accuracy</div>
+        <div class="chat-title-sub">AI study assistant</div>
       </div>
       <div class="chat-actions">
         <button class="icon-btn" onclick="downloadChat()">⬇️</button>
@@ -634,65 +634,7 @@
       <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
         <div style="font-size: 40px; margin-bottom: 12px;">🤖</div>
         <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Welcome to CHOTU AI</div>
-        <div style="font-size: 13px; max-width: 400px;">Your personal AI study assistant. Upload PDFs, ask questions, and get instant, detailed explanations with 92% accuracy.</div>
-      </div>
-
-      <!-- Sample AI Message -->
-      <div class="message ai">
-        <div class="avatar ai">🤖</div>
-        <div>
-          <div class="message-bubble">
-            <strong>Hi there! 👋</strong><br><br>
-            I'm your AI study assistant. I can help you with:
-            <ul style="margin-top: 8px; margin-left: 16px;">
-              <li>Explaining complex concepts</li>
-              <li>Answering questions from your PDFs</li>
-              <li>Generating practice problems</li>
-              <li>Interview preparation</li>
-              <li>Study schedule planning</li>
-            </ul>
-          </div>
-          <div class="message-meta">
-            <span class="confidence-badge">
-              <span>✓</span>
-              <span>92% confident</span>
-            </span>
-            <span>Now</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sample User Message -->
-      <div class="message user">
-        <div>
-          <div class="message-bubble">What is Newton's Second Law?</div>
-          <div class="message-time" style="text-align: right;">Just now</div>
-        </div>
-        <div class="avatar user">👤</div>
-      </div>
-
-      <!-- Sample AI Response -->
-      <div class="message ai">
-        <div class="avatar ai">🤖</div>
-        <div>
-          <div class="message-bubble">
-            <strong>Newton's Second Law (F = ma)</strong><br><br>
-            This fundamental law states that the <a class="source-link" href="#">net force</a> acting on an object equals its mass multiplied by its acceleration.<br><br>
-            <strong>Key Points:</strong><br>
-            • Force is measured in Newtons (N)<br>
-            • Acceleration is in m/s²<br>
-            • The greater the force, the greater the acceleration<br><br>
-            <strong>Example:</strong> A 1000 kg car accelerating at 2 m/s² requires 2000 N of force.
-          </div>
-          <div class="message-meta">
-            <span class="confidence-badge">
-              <span>✓</span>
-              <span>95% confident</span>
-            </span>
-            <span class="source-link">📄 From Physics_101.pdf</span>
-            <span>2 seconds ago</span>
-          </div>
-        </div>
+        <div style="font-size: 13px; max-width: 400px;">Your personal AI study assistant. Upload PDFs, ask questions, and get instant explanations. Answers are generated live — nothing on this screen is pre-written.</div>
       </div>
 
     </div>
@@ -700,6 +642,7 @@
     <!-- INPUT AREA -->
     <div class="input-area">
       <div class="input-wrapper">
+        <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" onchange="handlePdfSelected(event)"/>
         <button class="file-upload-btn" onclick="uploadPDF()">📤</button>
         <textarea 
           class="input-field" 
@@ -862,7 +805,48 @@
   }
 
   function uploadPDF() {
-    alert('PDF Upload: Connect to backend for real functionality');
+    const token = localStorage.getItem('chotu_token');
+    if (!token) {
+      window.location.href = '/login.html';
+      return;
+    }
+    document.getElementById('pdfFileInput').click();
+  }
+
+  async function handlePdfSelected(event) {
+    const file = event.target.files[0];
+    event.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    const token = localStorage.getItem('chotu_token');
+    addMessage(`Uploading ${file.name}...`, 'user');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/upload/pdf', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('chotu_token');
+        window.location.href = '/login.html';
+        return;
+      }
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      addMessage(`Uploaded and processed "${file.name}" — ${data.chunks} chunks extracted. You can ask questions about it now.`, 'ai');
+    } catch (err) {
+      addMessage(`⚠️ Upload failed: ${err.message}`, 'ai');
+    }
   }
 
   function newChat() {
@@ -884,17 +868,29 @@
   }
 
   function downloadChat() {
-    alert('Download: Connect to backend for real functionality');
+    alert('Download chat is not built yet.');
   }
 
   function shareChat() {
-    alert('Share: Connect to backend for real functionality');
+    alert('Share chat is not built yet.');
   }
 
-  function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-      alert('Logout: Connect to backend for real functionality');
+  async function logout() {
+    if (!confirm('Are you sure you want to logout?')) return;
+    const token = localStorage.getItem('chotu_token');
+    try {
+      if (token) {
+        await fetch('/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      // even if the server call fails, still clear locally so the user isn't stuck
     }
+    localStorage.removeItem('chotu_token');
+    localStorage.removeItem('chotu_user');
+    window.location.href = '/login.html';
   }
 </script>
 

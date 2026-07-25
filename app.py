@@ -7,7 +7,9 @@ Ready for Immediate Deployment
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import os, json, sqlite3, secrets, logging, time, re, math
+import os, json, secrets, logging, time, re, math
+import psycopg2
+import psycopg2.extras
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 import numpy as np
@@ -46,7 +48,18 @@ app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS,
                   allow_credentials=True, allow_methods=["GET", "POST", "PUT", "DELETE"],
                   allow_headers=["Content-Type", "Authorization"], max_age=3600)
 
-DB_PATH = '/data/chotu.db' if os.path.exists('/data') else 'chotu.db'
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not set. "
+        "Create/attach a Postgres instance on Render and it will be injected automatically, "
+        "or set it manually if using an external Postgres provider."
+    )
+# Render's DATABASE_URL sometimes uses 'postgres://' — psycopg2 accepts this fine,
+# but normalize to 'postgresql://' for clarity/compatibility with other tools.
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
 UPLOADS_DIR = '/data/uploads' if os.path.exists('/data') else './uploads'
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -87,24 +100,46 @@ def rate_limit(max_requests=100, seconds=60):
 # DATABASE INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class PGConnWrapper:
+    """
+    Thin wrapper so the rest of this file's `db.execute(sql, params).fetchone()`
+    style calls (a sqlite3.Connection convenience method) keep working against a
+    real psycopg2 connection, which has no such method on the connection itself.
+    """
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, query, params=None):
+        cur = self._conn.cursor()
+        cur.execute(query, params if params is not None else None)
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def cursor(self):
+        return self._conn.cursor()
+
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys = ON')
-    conn.execute('PRAGMA journal_mode = WAL')
-    conn.execute('PRAGMA synchronous = FULL')
-    return conn
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return PGConnWrapper(conn)
 
 def init_db():
     db = get_db()
     try:
-        db.executescript("""
+        db.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             picture TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US'))
         );
         
         CREATE TABLE IF NOT EXISTS sessions (
@@ -112,23 +147,23 @@ def init_db():
             user_id INTEGER NOT NULL,
             expires_at TEXT NOT NULL,
             ip_address TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS exams (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             exam_name TEXT NOT NULL,
             subject TEXT NOT NULL,
             exam_date TEXT NOT NULL,
             estimated_hours INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS exam_schedule (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             exam_id INTEGER NOT NULL,
             day_number INTEGER,
             date TEXT,
@@ -147,17 +182,17 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS daily_study_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             study_date TEXT NOT NULL,
             minutes_studied INTEGER DEFAULT 0,
             topics_reviewed TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS weak_topics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             subject TEXT NOT NULL,
             topic TEXT NOT NULL,
@@ -168,7 +203,7 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS mock_exams (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             subject TEXT NOT NULL,
             exam_name TEXT,
@@ -176,12 +211,12 @@ def init_db():
             score INTEGER,
             accuracy FLOAT,
             time_taken_minutes INTEGER,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS quiz_questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             subject TEXT,
             topic TEXT,
             question TEXT,
@@ -191,7 +226,7 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS quiz_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             question_id INTEGER,
             is_correct BOOLEAN,
@@ -200,7 +235,7 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS knowledge_graph (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             source_topic TEXT,
             target_topic TEXT,
             relationship TEXT,
@@ -209,7 +244,7 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS daily_goals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             goal_date TEXT NOT NULL,
             goal_minutes INTEGER DEFAULT 60,
@@ -219,7 +254,7 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS leaderboard (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL UNIQUE,
             username TEXT,
             total_points INTEGER DEFAULT 0,
@@ -229,40 +264,40 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS user_badges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             badge_name TEXT NOT NULL,
             badge_icon TEXT,
-            earned_at TEXT DEFAULT (datetime('now')),
+            earned_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             UNIQUE(user_id, badge_name),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             message TEXT,
             type TEXT,
             read BOOLEAN DEFAULT FALSE,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS challenges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             creator_id INTEGER NOT NULL,
             challenge_type TEXT,
             subject TEXT,
             target_value INTEGER,
             participants TEXT,
             expires_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS friend_connections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             friend_id INTEGER NOT NULL,
             UNIQUE(user_id, friend_id),
@@ -270,32 +305,32 @@ def init_db():
         );
         
         CREATE TABLE IF NOT EXISTS user_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             content TEXT,
             subject TEXT,
             topic TEXT,
             pinned BOOLEAN DEFAULT FALSE,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
+            updated_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS bookmarks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             resource_type TEXT,
             resource_title TEXT NOT NULL,
             resource_url TEXT,
             subject TEXT,
             topic TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS study_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             subject TEXT,
             topic TEXT,
@@ -303,12 +338,12 @@ def init_db():
             duration_minutes INTEGER,
             score INTEGER,
             accuracy FLOAT,
-            date TEXT DEFAULT (datetime('now')),
+            date TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS user_goals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             goal_name TEXT NOT NULL,
             goal_type TEXT,
@@ -316,60 +351,60 @@ def init_db():
             deadline TEXT,
             progress INTEGER DEFAULT 0,
             status TEXT DEFAULT 'active',
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL UNIQUE,
             plan TEXT DEFAULT 'free',
             status TEXT DEFAULT 'active',
-            started_at TEXT DEFAULT (datetime('now')),
+            started_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             expires_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS focus_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             subject TEXT,
             duration_minutes INTEGER DEFAULT 25,
             completed BOOLEAN DEFAULT FALSE,
-            started_at TEXT DEFAULT (datetime('now')),
+            started_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             ended_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS pdf_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
             file_path TEXT,
             file_size INTEGER,
-            upload_date TEXT DEFAULT (datetime('now')),
+            upload_date TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS document_chunks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             document_id INTEGER NOT NULL,
             chunk_text TEXT NOT NULL,
             chunk_index INTEGER,
-            embedding BLOB,
-            created_at TEXT DEFAULT (datetime('now')),
+            embedding BYTEA,
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (document_id) REFERENCES pdf_documents(id) ON DELETE CASCADE
         );
         
         CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             question TEXT NOT NULL,
             answer TEXT,
             relevant_chunks TEXT,
             relevance_score FLOAT,
             confidence INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         """)
@@ -424,16 +459,16 @@ def require_user(request: Request) -> dict:
         
         db = get_db()
         try:
-            session = db.execute('SELECT user_id, expires_at FROM sessions WHERE token=?', (token,)).fetchone()
+            session = db.execute('SELECT user_id, expires_at FROM sessions WHERE token=%s', (token,)).fetchone()
             if not session:
                 raise HTTPException(status_code=401, detail='Invalid token')
             
             if datetime.fromisoformat(session['expires_at']) < datetime.now():
-                db.execute('DELETE FROM sessions WHERE token=?', (token,))
+                db.execute('DELETE FROM sessions WHERE token=%s', (token,))
                 db.commit()
                 raise HTTPException(status_code=401, detail='Token expired')
             
-            user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
+            user = db.execute('SELECT * FROM users WHERE id=%s', (session['user_id'],)).fetchone()
             if not user:
                 raise HTTPException(status_code=401, detail='User not found')
             
@@ -559,18 +594,18 @@ def login(req: dict, request: Request):
         
         db = get_db()
         try:
-            user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
+            user = db.execute('SELECT * FROM users WHERE email=%s', (email,)).fetchone()
             if not user:
-                db.execute('INSERT INTO users (email, name) VALUES(?,?)', (email, name))
+                db.execute('INSERT INTO users (email, name) VALUES(%s,%s)', (email, name))
                 db.commit()
-                user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
+                user = db.execute('SELECT * FROM users WHERE email=%s', (email,)).fetchone()
             
             token = secrets.token_urlsafe(32)
             expires_at = (datetime.now() + timedelta(days=30)).isoformat()
             ip = request.client.host if request.client else "unknown"
             
-            db.execute('DELETE FROM sessions WHERE expires_at < ?', (datetime.now().isoformat(),))
-            db.execute('INSERT INTO sessions (token, user_id, expires_at, ip_address) VALUES(?,?,?,?)',
+            db.execute('DELETE FROM sessions WHERE expires_at < %s', (datetime.now().isoformat(),))
+            db.execute('INSERT INTO sessions (token, user_id, expires_at, ip_address) VALUES(%s,%s,%s,%s)',
                       (token, user['id'], expires_at, ip))
             db.commit()
             
@@ -591,7 +626,7 @@ def logout(request: Request):
             token = auth_header[7:].strip()
             db = get_db()
             try:
-                db.execute('DELETE FROM sessions WHERE token=?', (token,))
+                db.execute('DELETE FROM sessions WHERE token=%s', (token,))
                 db.commit()
             finally:
                 db.close()
@@ -621,11 +656,11 @@ def create_exam(req: dict, request: Request):
         
         db = get_db()
         try:
-            db.execute('INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(?,?,?,?,?)',
+            db.execute('INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(%s,%s,%s,%s,%s)',
                       (user['id'], exam_name, subject, exam_date, estimated_hours))
             db.commit()
             
-            exam = db.execute('SELECT id FROM exams WHERE user_id=? AND exam_name=? ORDER BY created_at DESC LIMIT 1',
+            exam = db.execute('SELECT id FROM exams WHERE user_id=%s AND exam_name=%s ORDER BY created_at DESC LIMIT 1',
                              (user['id'], exam_name)).fetchone()
             exam_id = exam['id']
             
@@ -634,7 +669,7 @@ def create_exam(req: dict, request: Request):
             
             for day in range(min(days_left, 365)):
                 schedule_date = (today + timedelta(days=day)).isoformat()
-                db.execute('INSERT INTO exam_schedule (exam_id, day_number, date, hours_planned) VALUES(?,?,?,?)',
+                db.execute('INSERT INTO exam_schedule (exam_id, day_number, date, hours_planned) VALUES(%s,%s,%s,%s)',
                           (exam_id, day + 1, schedule_date, 1))
             
             db.commit()
@@ -654,7 +689,7 @@ def get_exams(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            exams = db.execute('SELECT * FROM exams WHERE user_id=? ORDER BY exam_date LIMIT 100', 
+            exams = db.execute('SELECT * FROM exams WHERE user_id=%s ORDER BY exam_date LIMIT 100', 
                               (user['id'],)).fetchall()
             return {'exams': [dict(e) for e in exams]}
         finally:
@@ -670,7 +705,7 @@ def get_streaks(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            streak = db.execute('SELECT * FROM streaks WHERE user_id=?', (user['id'],)).fetchone()
+            streak = db.execute('SELECT * FROM streaks WHERE user_id=%s', (user['id'],)).fetchone()
             return dict(streak) if streak else {'current_streak': 0, 'longest_streak': 0}
         finally:
             db.close()
@@ -687,17 +722,17 @@ def log_streak(request: Request):
         
         db = get_db()
         try:
-            streak = db.execute('SELECT * FROM streaks WHERE user_id=?', (user['id'],)).fetchone()
+            streak = db.execute('SELECT * FROM streaks WHERE user_id=%s', (user['id'],)).fetchone()
             
             if not streak:
-                db.execute('INSERT OR IGNORE INTO streaks (user_id, current_streak, longest_streak, last_study_date) VALUES(?,?,?,?)',
+                db.execute('INSERT INTO streaks (user_id, current_streak, longest_streak, last_study_date) VALUES(%s,%s,%s,%s) ON CONFLICT (user_id) DO NOTHING',
                           (user['id'], 1, 1, today))
             else:
                 if streak['last_study_date'] != today:
                     new_current = streak['current_streak'] + 1 if streak['last_study_date'] and \
                                   (datetime.now().date() - datetime.fromisoformat(streak['last_study_date']).date()).days == 1 else 1
                     new_longest = max(new_current, streak['longest_streak'])
-                    db.execute('UPDATE streaks SET current_streak=?, longest_streak=?, last_study_date=? WHERE user_id=?',
+                    db.execute('UPDATE streaks SET current_streak=%s, longest_streak=%s, last_study_date=%s WHERE user_id=%s',
                               (new_current, new_longest, today, user['id']))
             
             db.commit()
@@ -717,7 +752,7 @@ def get_daily_report(request: Request):
         
         db = get_db()
         try:
-            log = db.execute('SELECT * FROM daily_study_log WHERE user_id=? AND study_date=?',
+            log = db.execute('SELECT * FROM daily_study_log WHERE user_id=%s AND study_date=%s',
                             (user['id'], today)).fetchone()
             
             if not log:
@@ -741,14 +776,14 @@ def get_goal(request: Request):
         
         db = get_db()
         try:
-            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
+            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=%s AND goal_date=%s',
                              (user['id'], today)).fetchone()
             
             if not goal:
-                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(?,?,?,?)',
+                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(%s,%s,%s,%s)',
                           (user['id'], today, 60, 0))
                 db.commit()
-                goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
+                goal = db.execute('SELECT * FROM daily_goals WHERE user_id=%s AND goal_date=%s',
                                  (user['id'], today)).fetchone()
             
             d = dict(goal)
@@ -770,14 +805,14 @@ def update_goal(req: dict, request: Request):
         
         db = get_db()
         try:
-            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
+            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=%s AND goal_date=%s',
                              (user['id'], today)).fetchone()
             
             if goal:
-                db.execute('UPDATE daily_goals SET completed_minutes=completed_minutes+? WHERE user_id=? AND goal_date=?',
+                db.execute('UPDATE daily_goals SET completed_minutes=completed_minutes+%s WHERE user_id=%s AND goal_date=%s',
                           (minutes, user['id'], today))
             else:
-                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(?,?,?,?)',
+                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(%s,%s,%s,%s)',
                           (user['id'], today, 60, minutes))
             
             db.commit()
@@ -802,9 +837,9 @@ def note_create(req: dict, request: Request):
         
         db = get_db()
         try:
-            cursor = db.execute('INSERT INTO user_notes (user_id, title, content) VALUES(?,?,?)',
+            cursor = db.execute('INSERT INTO user_notes (user_id, title, content) VALUES(%s,%s,%s) RETURNING id',
                       (user['id'], title, content))
-            note_id = cursor.lastrowid
+            note_id = cursor.fetchone()['id']
             db.commit()
             return {'status': 'ok', 'note_id': note_id}
         finally:
@@ -822,7 +857,7 @@ def notes_get(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            notes = db.execute('SELECT * FROM user_notes WHERE user_id=? ORDER BY updated_at DESC LIMIT 100', 
+            notes = db.execute('SELECT * FROM user_notes WHERE user_id=%s ORDER BY updated_at DESC LIMIT 100', 
                               (user['id'],)).fetchall()
             return {'notes': [dict(n) for n in notes]}
         finally:
@@ -838,7 +873,7 @@ def delete_note(note_id: int, request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            db.execute('DELETE FROM user_notes WHERE id=? AND user_id=?', (note_id, user['id']))
+            db.execute('DELETE FROM user_notes WHERE id=%s AND user_id=%s', (note_id, user['id']))
             db.commit()
             return {'status': 'ok'}
         finally:
@@ -857,9 +892,9 @@ def focus_start(req: dict, request: Request):
         
         db = get_db()
         try:
-            cursor = db.execute('INSERT INTO focus_sessions (user_id, subject, duration_minutes) VALUES(?,?,?)',
+            cursor = db.execute('INSERT INTO focus_sessions (user_id, subject, duration_minutes) VALUES(%s,%s,%s) RETURNING id',
                       (user['id'], subject, duration))
-            sid = cursor.lastrowid
+            sid = cursor.fetchone()['id']
             db.commit()
             return {'session_id': sid, 'duration': duration}
         finally:
@@ -879,21 +914,21 @@ def focus_end(session_id: int, req: dict, request: Request):
         
         db = get_db()
         try:
-            session = db.execute('SELECT * FROM focus_sessions WHERE id=? AND user_id=?',
+            session = db.execute('SELECT * FROM focus_sessions WHERE id=%s AND user_id=%s',
                                (session_id, user['id'])).fetchone()
             
             if not session:
                 raise HTTPException(status_code=404, detail='Session not found')
             
-            db.execute('UPDATE focus_sessions SET completed=TRUE, ended_at=datetime("now") WHERE id=? AND user_id=?',
+            db.execute('UPDATE focus_sessions SET completed=TRUE, ended_at=datetime("now") WHERE id=%s AND user_id=%s',
                       (session_id, user['id']))
             
-            db.execute('INSERT INTO study_history (user_id, subject, session_type, duration_minutes) VALUES(?,?,?,?)',
+            db.execute('INSERT INTO study_history (user_id, subject, session_type, duration_minutes) VALUES(%s,%s,%s,%s)',
                       (user['id'], session['subject'], 'focus', duration))
             
             today = datetime.now().date().isoformat()
-            db.execute('''INSERT INTO daily_goals (user_id, goal_date, completed_minutes) VALUES(?,?,?)
-                          ON CONFLICT(user_id, goal_date) DO UPDATE SET completed_minutes=completed_minutes+?''',
+            db.execute('''INSERT INTO daily_goals (user_id, goal_date, completed_minutes) VALUES(%s,%s,%s)
+                          ON CONFLICT(user_id, goal_date) DO UPDATE SET completed_minutes=completed_minutes+%s''',
                       (user['id'], today, duration, duration))
             
             db.commit()
@@ -953,15 +988,14 @@ async def upload_pdf(file: UploadFile = File(...), request: Request = None):
         
         db = get_db()
         try:
-            cursor = db.execute('INSERT INTO pdf_documents (user_id, filename, file_path, file_size) VALUES(?,?,?,?)',
+            cursor = db.execute('INSERT INTO pdf_documents (user_id, filename, file_path, file_size) VALUES(%s,%s,%s,%s) RETURNING id',
                       (user['id'], file.filename[:255], file_path, len(content)))
+            doc_id = cursor.fetchone()['id']
             db.commit()
-            
-            doc_id = cursor.lastrowid
             
             for i, chunk in enumerate(chunks):
                 embedding = rag.embed(chunk)
-                db.execute('INSERT INTO document_chunks (document_id, chunk_text, chunk_index, embedding) VALUES(?,?,?,?)',
+                db.execute('INSERT INTO document_chunks (document_id, chunk_text, chunk_index, embedding) VALUES(%s,%s,%s,%s)',
                           (doc_id, chunk, i, embedding.tobytes()))
             
             db.commit()
@@ -984,7 +1018,7 @@ def chat_ask(req: dict, request: Request):
         try:
             chunks_data = db.execute('''SELECT dc.chunk_text FROM document_chunks dc
                                        JOIN pdf_documents pd ON dc.document_id = pd.id
-                                       WHERE pd.user_id = ? LIMIT 100''', (user['id'],)).fetchall()
+                                       WHERE pd.user_id = %s LIMIT 100''', (user['id'],)).fetchall()
             
             chunks = [row['chunk_text'] for row in chunks_data] if chunks_data else []
             
@@ -1036,7 +1070,7 @@ def chat_ask(req: dict, request: Request):
                     answer = "I hit an error calling the AI model and don't have any study materials uploaded for this yet. Try again in a moment, or upload a relevant PDF."
             
             db.execute('''INSERT INTO chat_history (user_id, question, answer, relevant_chunks, relevance_score, confidence)
-                         VALUES(?,?,?,?,?,?)''',
+                         VALUES(%s,%s,%s,%s,%s,%s)''',
                       (user['id'], question, answer[:2000], json.dumps(relevant_chunks[:3]), 
                        sum(r['score'] for r in rag.hybrid_search(question, chunks, top_k=3)) / max(1, len(rag.hybrid_search(question, chunks, top_k=3))) if chunks else 0,
                        confidence))
@@ -1058,7 +1092,7 @@ def chat_history(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            history = db.execute('''SELECT * FROM chat_history WHERE user_id=?
+            history = db.execute('''SELECT * FROM chat_history WHERE user_id=%s
                                    ORDER BY created_at DESC LIMIT 50''', (user['id'],)).fetchall()
             return {'history': [dict(h) for h in history]}
         finally:
@@ -1086,7 +1120,7 @@ def get_notifications(request: Request):
         user = require_user(request)
         db = get_db()
         try:
-            n = db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50', 
+            n = db.execute('SELECT * FROM notifications WHERE user_id=%s ORDER BY created_at DESC LIMIT 50', 
                           (user['id'],)).fetchall()
             return {'notifications': [dict(x) for x in n]}
         finally:

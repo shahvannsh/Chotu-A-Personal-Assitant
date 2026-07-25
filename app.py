@@ -970,7 +970,8 @@ async def upload_pdf(file: UploadFile = File(...), request: Request = None):
             db.close()
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"PDF upload failed for {file.filename}: {e}")
         raise HTTPException(status_code=500, detail='PDF upload failed')
 
 @app.post('/chat/ask')

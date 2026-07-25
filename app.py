@@ -802,9 +802,9 @@ def note_create(req: dict, request: Request):
         
         db = get_db()
         try:
-            db.execute('INSERT INTO user_notes (user_id, title, content) VALUES(?,?,?)',
+            cursor = db.execute('INSERT INTO user_notes (user_id, title, content) VALUES(?,?,?)',
                       (user['id'], title, content))
-            note_id = db.lastrowid
+            note_id = cursor.lastrowid
             db.commit()
             return {'status': 'ok', 'note_id': note_id}
         finally:
@@ -857,9 +857,9 @@ def focus_start(req: dict, request: Request):
         
         db = get_db()
         try:
-            db.execute('INSERT INTO focus_sessions (user_id, subject, duration_minutes) VALUES(?,?,?)',
+            cursor = db.execute('INSERT INTO focus_sessions (user_id, subject, duration_minutes) VALUES(?,?,?)',
                       (user['id'], subject, duration))
-            sid = db.lastrowid
+            sid = cursor.lastrowid
             db.commit()
             return {'session_id': sid, 'duration': duration}
         finally:
@@ -953,11 +953,11 @@ async def upload_pdf(file: UploadFile = File(...), request: Request = None):
         
         db = get_db()
         try:
-            db.execute('INSERT INTO pdf_documents (user_id, filename, file_path, file_size) VALUES(?,?,?,?)',
+            cursor = db.execute('INSERT INTO pdf_documents (user_id, filename, file_path, file_size) VALUES(?,?,?,?)',
                       (user['id'], file.filename[:255], file_path, len(content)))
             db.commit()
             
-            doc_id = db.lastrowid
+            doc_id = cursor.lastrowid
             
             for i, chunk in enumerate(chunks):
                 embedding = rag.embed(chunk)

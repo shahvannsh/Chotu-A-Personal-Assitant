@@ -927,7 +927,8 @@ async def upload_pdf(file: UploadFile = File(...), request: Request = None):
             for page in doc:
                 text += page.get_text()
             text = text[:1000000]
-        except:
+        except Exception as e:
+            logger.error(f"PDF extraction failed for {file.filename}: {e}")
             raise HTTPException(status_code=400, detail='Cannot extract PDF text')
         
         if not text:

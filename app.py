@@ -526,6 +526,26 @@ rag = AdvancedRAG()
 def index():
     return FileResponse('index.html')
 
+@app.get('/index.html')
+def index_html():
+    return FileResponse('index.html')
+
+@app.get('/login.html')
+def login_html():
+    return FileResponse('login.html')
+
+@app.get('/dashboard.html')
+def dashboard_html():
+    return FileResponse('dashboard.html')
+
+@app.get('/study.html')
+def study_html():
+    return FileResponse('study.html')
+
+@app.get('/history.html')
+def history_html():
+    return FileResponse('history.html')
+
 @app.get('/health')
 def health():
     return {'status': 'ok', 'version': '2.0.1', 'timestamp': datetime.now().isoformat()}

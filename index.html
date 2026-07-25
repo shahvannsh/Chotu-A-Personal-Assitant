@@ -782,42 +782,76 @@
     }
   });
 
-  function sendMessage() {
+  async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
-    
+
     if (!message) return;
 
-    // Add user message
+    const token = localStorage.getItem('chotu_token');
+    if (!token) {
+      window.location.href = '/login.html';
+      return;
+    }
+
     addMessage(message, 'user');
     input.value = '';
     input.style.height = 'auto';
 
-    // Simulate AI response
-    setTimeout(() => {
-      addMessage('This is a simulated response. Connect to backend for real AI responses.', 'ai');
-    }, 1000);
+    try {
+      const response = await fetch('/chat/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ question: message })
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('chotu_token');
+        window.location.href = '/login.html';
+        return;
+      }
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      addMessage(data.answer, 'ai');
+    } catch (err) {
+      addMessage(`⚠️ Failed to reach Chotu: ${err.message}`, 'ai');
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   function addMessage(text, sender) {
     const container = document.getElementById('messagesContainer');
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${sender}`;
-    
+
     const avatar = sender === 'user' ? '👤' : '🤖';
     const avatarClass = sender === 'user' ? 'user' : 'ai';
-    
+    const safeText = escapeHtml(text).replace(/\n/g, '<br>');
+
     msgDiv.innerHTML = `
       <div class="${sender === 'user' ? '' : 'avatar ' + avatarClass}${sender === 'user' ? '' : ''}">
         ${sender === 'user' ? '' : avatar}
       </div>
       <div>
-        <div class="message-bubble">${text}</div>
+        <div class="message-bubble">${safeText}</div>
         <div class="message-time" style="${sender === 'user' ? 'text-align: right;' : ''}">${new Date().toLocaleTimeString()}</div>
       </div>
       ${sender === 'user' ? `<div class="avatar ${avatarClass}">${avatar}</div>` : ''}
     `;
-    
+
     container.appendChild(msgDiv);
     container.scrollTop = container.scrollHeight;
   }

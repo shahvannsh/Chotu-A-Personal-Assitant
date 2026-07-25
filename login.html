@@ -41,15 +41,26 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 
   <div class="divider"><span>SIGN IN TO CONTINUE</span></div>
 
-  <a href="/auth/login" class="google-btn">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-    </svg>
-    Continue with Google
-  </a>
+  <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+    <div>
+      <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">NAME</label>
+      <input id="loginName" type="text" placeholder="Your name" style="width:100%;margin-top:6px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-hi);font-family:var(--sans);font-size:14px;outline:none;"/>
+    </div>
+    <div>
+      <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">EMAIL</label>
+      <input id="loginEmail" type="email" placeholder="you@example.com" style="width:100%;margin-top:6px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-hi);font-family:var(--sans);font-size:14px;outline:none;"/>
+    </div>
+    <button id="loginBtn" onclick="doLogin()" style="width:100%;padding:14px 20px;background:var(--accent);border:none;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:15px;font-weight:600;color:#04121a;">Sign In</button>
+  </div>
+
+  <!--
+    NOTE: This app's backend (app.py) has no Google OAuth route implemented,
+    despite requirements.txt including authlib/google-auth. The old
+    "Continue with Google" button linked to a route that doesn't exist for
+    OAuth and would 405 immediately (it's a POST-only JSON endpoint).
+    This is a plain email+name login against POST /auth/login, matching
+    what the backend actually supports today.
+  -->
 
   <div class="features">
     <div class="feature"><div class="feature-dot"></div>Focus sessions with idle detection</div>
@@ -67,6 +78,51 @@ if (params.get('error')) {
   const el = document.getElementById('errorMsg');
   el.textContent = 'Sign in failed. Please try again.';
   el.classList.add('visible');
+}
+
+// If already logged in, skip straight to the app
+if (localStorage.getItem('chotu_token')) {
+  window.location.href = '/index.html';
+}
+
+async function doLogin() {
+  const name = document.getElementById('loginName').value.trim();
+  const email = document.getElementById('loginEmail').value.trim();
+  const errEl = document.getElementById('errorMsg');
+  const btn = document.getElementById('loginBtn');
+
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Enter a valid email.';
+    errEl.classList.add('visible');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  errEl.classList.remove('visible');
+
+  try {
+    const response = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name: name || 'User' })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Login failed (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    localStorage.setItem('chotu_token', data.token);
+    localStorage.setItem('chotu_user', JSON.stringify(data.user));
+    window.location.href = '/index.html';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.add('visible');
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
 }
 </script>
 </body>

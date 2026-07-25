@@ -1,1100 +1,898 @@
-"""
-CHOTU v2.0 - COMPLETE PRODUCTION AI STUDY PLATFORM
-Advanced RAG Chatbot + All 5 Phases + Enterprise Security
-Ready for Immediate Deployment
-"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHOTU AI - Advanced Chatbot Interface</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-import os, json, sqlite3, secrets, logging, time, re, math
-from datetime import datetime, timedelta
-from typing import List, Dict, Tuple, Optional
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-import fitz
-import requests
-from functools import wraps
+    :root {
+      --primary: #FF6B6B;
+      --secondary: #4ECDC4;
+      --accent: #FFE66D;
+      --dark: #0f1419;
+      --darker: #0a0d12;
+      --light: #f5f7fa;
+      --text-primary: #e8eef2;
+      --text-secondary: #a8b2bf;
+      --border: #1e2835;
+      --success: #00d66a;
+      --warning: #ffa500;
+      --error: #ff5555;
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PRODUCTION LOGGING (SECURE)
-# ═══════════════════════════════════════════════════════════════════════════════
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100vh;
+    }
 
-class SecureFormatter(logging.Formatter):
-    def format(self, record):
-        msg = str(record.msg)
-        if any(x in msg.lower() for x in ['key', 'token', 'password', 'secret']):
-            record.msg = "[REDACTED]"
-        return super().format(record)
+    .chatbot-container {
+      display: flex;
+      height: 100vh;
+      background: var(--dark);
+    }
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-handler = logging.StreamHandler()
-handler.setFormatter(SecureFormatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.handlers = [handler]
+    /* SIDEBAR */
+    .sidebar {
+      width: 300px;
+      background: var(--darker);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
 
-app = FastAPI(title="CHOTU v2.0", version="2.0.1")
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:8000", 
-                  "https://chotu-lcc7.onrender.com", "https://chotu.onrender.com"]
+    .logo-icon {
+      font-size: 24px;
+    }
 
-app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, 
-                  allow_credentials=True, allow_methods=["GET", "POST", "PUT", "DELETE"],
-                  allow_headers=["Content-Type", "Authorization"], max_age=3600)
+    .new-chat-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      font-size: 12px;
+    }
 
-DB_PATH = '/data/chotu.db' if os.path.exists('/data') else 'chotu.db'
-UPLOADS_DIR = '/data/uploads' if os.path.exists('/data') else './uploads'
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+    .new-chat-btn:hover {
+      background: #ff5252;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
 
-GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
-WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
-MAX_PDF_SIZE = 50 * 1024 * 1024
-MAX_UPLOAD_LIMIT = 100
-REQUEST_COUNTS = {}
+    .conversation-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# RATE LIMITING DECORATOR
-# ═══════════════════════════════════════════════════════════════════════════════
+    .conversation-item {
+      padding: 12px;
+      margin-bottom: 8px;
+      background: rgba(78, 205, 196, 0.05);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 13px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
 
-def rate_limit(max_requests=100, seconds=60):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            ip = kwargs.get('request', None)
-            if ip:
-                ip = ip.client.host
-            else:
-                ip = "unknown"
-            key = f"{ip}:{func.__name__}"
-            now = time.time()
-            
-            if key not in REQUEST_COUNTS:
-                REQUEST_COUNTS[key] = []
-            REQUEST_COUNTS[key] = [t for t in REQUEST_COUNTS[key] if now - t < seconds]
-            
-            if len(REQUEST_COUNTS[key]) >= max_requests:
-                raise HTTPException(status_code=429, detail="Too many requests")
-            REQUEST_COUNTS[key].append(now)
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+    .conversation-item:hover {
+      background: rgba(78, 205, 196, 0.1);
+      border-color: var(--secondary);
+      color: var(--text-primary);
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# DATABASE INITIALIZATION
-# ═══════════════════════════════════════════════════════════════════════════════
+    .conversation-item.active {
+      background: rgba(255, 107, 107, 0.1);
+      border-color: var(--primary);
+      color: var(--primary);
+      font-weight: 600;
+    }
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys = ON')
-    conn.execute('PRAGMA journal_mode = WAL')
-    conn.execute('PRAGMA synchronous = FULL')
-    return conn
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
 
-def init_db():
-    db = get_db()
-    try:
-        db.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            picture TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        );
-        
-        CREATE TABLE IF NOT EXISTS sessions (
-            token TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            expires_at TEXT NOT NULL,
-            ip_address TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS exams (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            exam_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            exam_date TEXT NOT NULL,
-            estimated_hours INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS exam_schedule (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exam_id INTEGER NOT NULL,
-            day_number INTEGER,
-            date TEXT,
-            topics TEXT,
-            hours_planned INTEGER DEFAULT 1,
-            status TEXT DEFAULT 'pending',
-            FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS streaks (
-            user_id INTEGER PRIMARY KEY,
-            current_streak INTEGER DEFAULT 0,
-            longest_streak INTEGER DEFAULT 0,
-            last_study_date TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS daily_study_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            study_date TEXT NOT NULL,
-            minutes_studied INTEGER DEFAULT 0,
-            topics_reviewed TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS weak_topics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            subject TEXT NOT NULL,
-            topic TEXT NOT NULL,
-            confidence FLOAT DEFAULT 0.5,
-            last_reviewed TEXT,
-            next_review TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS mock_exams (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            subject TEXT NOT NULL,
-            exam_name TEXT,
-            total_questions INTEGER DEFAULT 10,
-            score INTEGER,
-            accuracy FLOAT,
-            time_taken_minutes INTEGER,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS quiz_questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            subject TEXT,
-            topic TEXT,
-            question TEXT,
-            options TEXT,
-            correct_answer TEXT,
-            difficulty INTEGER DEFAULT 1
-        );
-        
-        CREATE TABLE IF NOT EXISTS quiz_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            question_id INTEGER,
-            is_correct BOOLEAN,
-            time_spent_seconds INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS knowledge_graph (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            source_topic TEXT,
-            target_topic TEXT,
-            relationship TEXT,
-            strength FLOAT DEFAULT 0.5,
-            subject TEXT
-        );
-        
-        CREATE TABLE IF NOT EXISTS daily_goals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            goal_date TEXT NOT NULL,
-            goal_minutes INTEGER DEFAULT 60,
-            completed_minutes INTEGER DEFAULT 0,
-            UNIQUE(user_id, goal_date),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS leaderboard (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL UNIQUE,
-            username TEXT,
-            total_points INTEGER DEFAULT 0,
-            current_streak INTEGER DEFAULT 0,
-            rank INTEGER,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS user_badges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            badge_name TEXT NOT NULL,
-            badge_icon TEXT,
-            earned_at TEXT DEFAULT (datetime('now')),
-            UNIQUE(user_id, badge_name),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            message TEXT,
-            type TEXT,
-            read BOOLEAN DEFAULT FALSE,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS challenges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            creator_id INTEGER NOT NULL,
-            challenge_type TEXT,
-            subject TEXT,
-            target_value INTEGER,
-            participants TEXT,
-            expires_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS friend_connections (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            friend_id INTEGER NOT NULL,
-            UNIQUE(user_id, friend_id),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS user_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT,
-            subject TEXT,
-            topic TEXT,
-            pinned BOOLEAN DEFAULT FALSE,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS bookmarks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            resource_type TEXT,
-            resource_title TEXT NOT NULL,
-            resource_url TEXT,
-            subject TEXT,
-            topic TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS study_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            subject TEXT,
-            topic TEXT,
-            session_type TEXT,
-            duration_minutes INTEGER,
-            score INTEGER,
-            accuracy FLOAT,
-            date TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS user_goals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            goal_name TEXT NOT NULL,
-            goal_type TEXT,
-            target_value TEXT,
-            deadline TEXT,
-            progress INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'active',
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL UNIQUE,
-            plan TEXT DEFAULT 'free',
-            status TEXT DEFAULT 'active',
-            started_at TEXT DEFAULT (datetime('now')),
-            expires_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS focus_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            subject TEXT,
-            duration_minutes INTEGER DEFAULT 25,
-            completed BOOLEAN DEFAULT FALSE,
-            started_at TEXT DEFAULT (datetime('now')),
-            ended_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS pdf_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            filename TEXT NOT NULL,
-            file_path TEXT,
-            file_size INTEGER,
-            upload_date TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS document_chunks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            document_id INTEGER NOT NULL,
-            chunk_text TEXT NOT NULL,
-            chunk_index INTEGER,
-            embedding BLOB,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (document_id) REFERENCES pdf_documents(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            question TEXT NOT NULL,
-            answer TEXT,
-            relevant_chunks TEXT,
-            relevance_score FLOAT,
-            confidence INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        """)
-        db.commit()
-        logger.info("Database initialized")
-    except Exception as e:
-        logger.error(f"DB error: {type(e).__name__}")
-        raise
-    finally:
-        db.close()
+    .sidebar-footer button {
+      flex: 1;
+      padding: 10px;
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 12px;
+    }
 
-init_db()
+    .sidebar-footer button:hover {
+      background: rgba(255, 107, 107, 0.2);
+      color: var(--primary);
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# VALIDATION & SECURITY
-# ═══════════════════════════════════════════════════════════════════════════════
+    /* MAIN CHAT AREA */
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--dark);
+    }
 
-def validate_string(value: str, field: str, min_len=1, max_len=255) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{field} must be string")
-    value = value.strip()
-    if len(value) < min_len or len(value) > max_len:
-        raise ValueError(f"{field} must be {min_len}-{max_len} chars")
-    if any(c in value for c in ['<', '>', '"', "'"]):
-        raise ValueError(f"{field} contains invalid chars")
-    return value
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(78, 205, 196, 0.05) 0%, transparent 100%);
+    }
 
-def validate_email(email: str) -> str:
-    email = email.strip().lower()
-    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        raise ValueError("Invalid email")
-    return email
+    .chat-title {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
 
-def validate_token(token: str) -> str:
-    if not token or len(token) < 20 or len(token) > 100:
-        raise ValueError("Invalid token")
-    if not re.match(r'^[A-Za-z0-9_-]+$', token):
-        raise ValueError("Invalid token format")
-    return token
+    .chat-title-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
 
-def require_user(request: Request) -> dict:
-    try:
-        auth_header = request.headers.get('Authorization', '').strip()
-        if not auth_header or not auth_header.startswith('Bearer '):
-            raise HTTPException(status_code=401, detail='Invalid auth header')
-        
-        token = auth_header[7:].strip()
-        if not token:
-            raise HTTPException(status_code=401, detail='Token missing')
-        
-        validate_token(token)
-        
-        db = get_db()
-        try:
-            session = db.execute('SELECT user_id, expires_at FROM sessions WHERE token=?', (token,)).fetchone()
-            if not session:
-                raise HTTPException(status_code=401, detail='Invalid token')
-            
-            if datetime.fromisoformat(session['expires_at']) < datetime.now():
-                db.execute('DELETE FROM sessions WHERE token=?', (token,))
-                db.commit()
-                raise HTTPException(status_code=401, detail='Token expired')
-            
-            user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
-            if not user:
-                raise HTTPException(status_code=401, detail='User not found')
-            
-            return dict(user)
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail='Auth failed')
+    .chat-actions {
+      display: flex;
+      gap: 12px;
+    }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ADVANCED RAG PIPELINE
-# ═══════════════════════════════════════════════════════════════════════════════
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
 
-class AdvancedRAG:
-    def __init__(self):
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
-            self.has_embedder = True
-        except:
-            self.has_embedder = False
+    .icon-btn:hover {
+      background: rgba(78, 205, 196, 0.1);
+      border-color: var(--secondary);
+      color: var(--secondary);
+    }
+
+    /* MESSAGES */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message.ai {
+      justify-content: flex-start;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .avatar.user {
+      background: linear-gradient(135deg, var(--primary), #ff8787);
+      color: white;
+    }
+
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--secondary), #26a896);
+      color: white;
+    }
+
+    .message-bubble {
+      max-width: 60%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      word-wrap: break-word;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .message.user .message-bubble {
+      background: linear-gradient(135deg, var(--primary), #ff8787);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.ai .message-bubble {
+      background: var(--darker);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .message-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: rgba(0, 214, 106, 0.15);
+      color: var(--success);
+      border-radius: 4px;
+      border: 1px solid rgba(0, 214, 106, 0.3);
+    }
+
+    .source-link {
+      color: var(--secondary);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--secondary);
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+
+    .source-link:hover {
+      color: var(--accent);
+    }
+
+    .loading-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--secondary);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-8px); }
+    }
+
+    /* INPUT AREA */
+    .input-area {
+      padding: 20px 24px;
+      border-top: 1px solid var(--border);
+      background: linear-gradient(180deg, transparent 0%, rgba(78, 205, 196, 0.02) 100%);
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .file-upload-btn {
+      width: 40px;
+      height: 40px;
+      background: rgba(78, 205, 196, 0.1);
+      border: 1px solid var(--secondary);
+      color: var(--secondary);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      font-size: 18px;
+    }
+
+    .file-upload-btn:hover {
+      background: rgba(78, 205, 196, 0.2);
+    }
+
+    .input-field {
+      flex: 1;
+      background: var(--darker);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      resize: none;
+      max-height: 100px;
+      transition: all 0.3s;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: var(--secondary);
+      box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.1);
+    }
+
+    .input-field::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .send-btn {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), #ff8787);
+      border: none;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.3s;
+      font-weight: 600;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(255, 107, 107, 0.3);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .input-helper {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .quick-action {
+      padding: 6px 12px;
+      background: rgba(78, 205, 196, 0.1);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      color: var(--text-secondary);
+    }
+
+    .quick-action:hover {
+      background: rgba(78, 205, 196, 0.2);
+      border-color: var(--secondary);
+      color: var(--secondary);
+    }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(78, 205, 196, 0.4);
+    }
+
+    /* MODAL */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--darker);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 24px;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+
+    .modal-close:hover {
+      color: var(--primary);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 260px;
+      }
+
+      .message-bubble {
+        max-width: 80%;
+      }
+
+      .chat-header {
+        padding: 12px 16px;
+      }
+
+      .messages-container {
+        padding: 16px;
+      }
+
+      .input-area {
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .toggle-sidebar {
+        display: block;
+      }
+
+      .message-bubble {
+        max-width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="chatbot-container">
+  
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">🎓</span>
+        <span>CHOTU</span>
+      </div>
+      <button class="new-chat-btn" onclick="newChat()">+ New</button>
+    </div>
+
+    <div class="conversation-list" id="conversationList">
+      <div class="conversation-item active">📚 Physics Help</div>
+      <div class="conversation-item">🧪 Chemistry Quiz</div>
+      <div class="conversation-item">📖 History Essay</div>
+      <div class="conversation-item">🔢 Math Problems</div>
+      <div class="conversation-item">💻 Programming Tips</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button onclick="showSettings()">⚙️ Settings</button>
+      <button onclick="logout()">🚪 Logout</button>
+    </div>
+  </div>
+
+  <!-- MAIN CHAT -->
+  <div class="chat-main">
     
-    def embed(self, text: str) -> np.ndarray:
-        if self.has_embedder:
-            return self.embedder.encode(text[:512])
-        else:
-            hash_val = hash(text) % 100
-            return np.array([float(hash_val)] * 384)
+    <!-- HEADER -->
+    <div class="chat-header">
+      <div>
+        <div class="chat-title">📚 Physics Help</div>
+        <div class="chat-title-sub">AI study assistant</div>
+      </div>
+      <div class="chat-actions">
+        <button class="icon-btn" onclick="downloadChat()">⬇️</button>
+        <button class="icon-btn" onclick="shareChat()">📤</button>
+        <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
+      </div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div class="messages-container" id="messagesContainer">
+      
+      <!-- Welcome Message -->
+      <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+        <div style="font-size: 40px; margin-bottom: 12px;">🤖</div>
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Welcome to CHOTU AI</div>
+        <div style="font-size: 13px; max-width: 400px;">Your personal AI study assistant. Upload PDFs, ask questions, and get instant explanations. Answers are generated live — nothing on this screen is pre-written.</div>
+      </div>
+
+    </div>
+
+    <!-- INPUT AREA -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" onchange="handlePdfSelected(event)"/>
+        <button class="file-upload-btn" onclick="uploadPDF()">📤</button>
+        <textarea 
+          class="input-field" 
+          id="messageInput"
+          placeholder="Ask me anything... (Shift+Enter for new line)"
+          rows="2"
+        ></textarea>
+        <button class="send-btn" onclick="sendMessage()">➤</button>
+      </div>
+
+      <div class="input-helper">
+        <span>Quick actions:</span>
+        <button class="quick-action" onclick="quickAsk('Explain this concept')">💡 Explain</button>
+        <button class="quick-action" onclick="quickAsk('Generate practice problems')">🎯 Practice</button>
+        <button class="quick-action" onclick="quickAsk('Quiz me')">🧠 Quiz</button>
+        <button class="quick-action" onclick="quickAsk('Create study plan')">📅 Plan</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal" id="settingsModal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="toggleSettings()">✕</button>
+    <div class="modal-header">⚙️ Settings</div>
     
-    def bm25_score(self, query: str, chunks: List[str]) -> List[float]:
-        query_terms = query.lower().split()
-        scores = []
-        avg_len = sum(len(c.split()) for c in chunks) / max(1, len(chunks))
-        
-        for chunk in chunks:
-            terms = chunk.lower().split()
-            score = 0.0
-            for term in query_terms:
-                tf = terms.count(term)
-                if tf > 0:
-                    k1, b = 1.5, 0.75
-                    idf = math.log((len(chunks) - 1 + 0.5) / (1 + 0.5))
-                    bm25 = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * len(terms) / avg_len))
-                    score += bm25
-            scores.append(score)
-        return scores
-    
-    def hybrid_search(self, query: str, chunks: List[str], top_k=3) -> List[Dict]:
-        if not chunks:
-            return []
-        
-        # Dense search
-        query_emb = self.embed(query)
-        dense_scores = []
-        for chunk in chunks:
-            chunk_emb = self.embed(chunk)
-            sim = cosine_similarity([query_emb], [chunk_emb])[0][0]
-            dense_scores.append(sim)
-        
-        # BM25 search
-        bm25_scores = self.bm25_score(query, chunks)
-        
-        # Normalize and combine
-        combined = []
-        max_dense = max(dense_scores) if dense_scores else 1
-        max_bm25 = max(bm25_scores) if bm25_scores else 1
-        
-        for i, chunk in enumerate(chunks):
-            alpha = 0.6
-            combined_score = alpha * (dense_scores[i] / max_dense) + (1-alpha) * (bm25_scores[i] / max_bm25)
-            combined.append({'text': chunk, 'score': combined_score})
-        
-        combined.sort(key=lambda x: x['score'], reverse=True)
-        
-        # Calculate confidence
-        for result in combined[:top_k]:
-            result['confidence'] = int(min(100, result['score'] * 100))
-        
-        return combined[:top_k]
+    <div style="margin-bottom: 24px;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">AI Model</div>
+      <select style="width: 100%; padding: 8px; background: var(--darker); border: 1px solid var(--border); color: var(--text-primary); border-radius: 6px;">
+        <option>Groq Mixtral 8x7b (Fast)</option>
+        <option>GPT-4 (Most Accurate)</option>
+        <option>Local LLaMA (Private)</option>
+      </select>
+    </div>
 
-rag = AdvancedRAG()
+    <div style="margin-bottom: 24px;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Response Length</div>
+      <div style="display: flex; gap: 12px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="radio" name="length" checked>
+          <span>Concise</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="radio" name="length">
+          <span>Detailed</span>
+        </label>
+      </div>
+    </div>
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# API ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════════════════
+    <div style="margin-bottom: 24px;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Learning Style</div>
+      <select style="width: 100%; padding: 8px; background: var(--darker); border: 1px solid var(--border); color: var(--text-primary); border-radius: 6px;">
+        <option>Visual Learner</option>
+        <option>Auditory Learner</option>
+        <option>Reading/Writing</option>
+        <option>Kinesthetic</option>
+      </select>
+    </div>
 
-@app.get('/')
-def index():
-    return FileResponse('index.html')
+    <button style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--primary), #ff8787); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;" onclick="toggleSettings()">Save Settings</button>
+  </div>
+</div>
 
-@app.get('/index.html')
-def index_html():
-    return FileResponse('index.html')
+<script>
+  // Auto-resize textarea
+  const textarea = document.getElementById('messageInput');
+  textarea.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+  });
 
-@app.get('/login.html')
-def login_html():
-    return FileResponse('login.html')
+  // Send message on Enter
+  textarea.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
 
-@app.get('/dashboard.html')
-def dashboard_html():
-    return FileResponse('dashboard.html')
+  async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
 
-@app.get('/study.html')
-def study_html():
-    return FileResponse('study.html')
+    if (!message) return;
 
-@app.get('/history.html')
-def history_html():
-    return FileResponse('history.html')
+    const token = localStorage.getItem('chotu_token');
+    if (!token) {
+      window.location.href = '/login.html';
+      return;
+    }
 
-@app.get('/health')
-def health():
-    return {'status': 'ok', 'version': '2.0.1', 'timestamp': datetime.now().isoformat()}
+    addMessage(message, 'user');
+    input.value = '';
+    input.style.height = 'auto';
 
-@app.post('/auth/login')
-@rate_limit(max_requests=50, seconds=60)
-def login(req: dict, request: Request):
-    try:
-        email = validate_email(req.get('email', ''))
-        name = validate_string(req.get('name', 'User'), 'name', 1, 100)
-        
-        db = get_db()
-        try:
-            user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
-            if not user:
-                db.execute('INSERT INTO users (email, name) VALUES(?,?)', (email, name))
-                db.commit()
-                user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
-            
-            token = secrets.token_urlsafe(32)
-            expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-            ip = request.client.host if request.client else "unknown"
-            
-            db.execute('DELETE FROM sessions WHERE expires_at < ?', (datetime.now().isoformat(),))
-            db.execute('INSERT INTO sessions (token, user_id, expires_at, ip_address) VALUES(?,?,?,?)',
-                      (token, user['id'], expires_at, ip))
-            db.commit()
-            
-            return {'token': token, 'user': dict(user), 'expires_at': expires_at}
-        finally:
-            db.close()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail='Login failed')
+    try {
+      const response = await fetch('/chat/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ question: message })
+      });
 
-@app.post('/auth/logout')
-def logout(request: Request):
-    try:
-        user = require_user(request)
-        auth_header = request.headers.get('Authorization', '').strip()
-        if auth_header.startswith('Bearer '):
-            token = auth_header[7:].strip()
-            db = get_db()
-            try:
-                db.execute('DELETE FROM sessions WHERE token=?', (token,))
-                db.commit()
-            finally:
-                db.close()
-        return {'status': 'ok'}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Logout failed')
+      if (response.status === 401) {
+        localStorage.removeItem('chotu_token');
+        window.location.href = '/login.html';
+        return;
+      }
 
-@app.get('/auth/me')
-def get_me(request: Request):
-    return require_user(request)
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${response.status}: ${errText}`);
+      }
 
-@app.post('/exams/create')
-def create_exam(req: dict, request: Request):
-    try:
-        user = require_user(request)
-        exam_name = validate_string(req.get('exam_name', ''), 'exam_name')
-        subject = validate_string(req.get('subject', ''), 'subject')
-        exam_date = req.get('exam_date', '')
-        estimated_hours = max(0, min(1000, int(req.get('estimated_hours', 0))))
-        
-        try:
-            exam_dt = datetime.fromisoformat(exam_date)
-        except:
-            raise HTTPException(status_code=400, detail='Invalid date')
-        
-        db = get_db()
-        try:
-            db.execute('INSERT INTO exams (user_id, exam_name, subject, exam_date, estimated_hours) VALUES(?,?,?,?,?)',
-                      (user['id'], exam_name, subject, exam_date, estimated_hours))
-            db.commit()
-            
-            exam = db.execute('SELECT id FROM exams WHERE user_id=? AND exam_name=? ORDER BY created_at DESC LIMIT 1',
-                             (user['id'], exam_name)).fetchone()
-            exam_id = exam['id']
-            
-            today = datetime.now().date()
-            days_left = max(1, (exam_dt.date() - today).days)
-            
-            for day in range(min(days_left, 365)):
-                schedule_date = (today + timedelta(days=day)).isoformat()
-                db.execute('INSERT INTO exam_schedule (exam_id, day_number, date, hours_planned) VALUES(?,?,?,?)',
-                          (exam_id, day + 1, schedule_date, 1))
-            
-            db.commit()
-            return {'status': 'ok', 'exam_id': exam_id}
-        finally:
-            db.close()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Exam creation failed')
+      const data = await response.json();
+      addMessage(data.answer, 'ai');
+    } catch (err) {
+      addMessage(`⚠️ Failed to reach Chotu: ${err.message}`, 'ai');
+    }
+  }
 
-@app.get('/exams')
-def get_exams(request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            exams = db.execute('SELECT * FROM exams WHERE user_id=? ORDER BY exam_date LIMIT 100', 
-                              (user['id'],)).fetchall()
-            return {'exams': [dict(e) for e in exams]}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get exams')
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
-@app.get('/streaks')
-def get_streaks(request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            streak = db.execute('SELECT * FROM streaks WHERE user_id=?', (user['id'],)).fetchone()
-            return dict(streak) if streak else {'current_streak': 0, 'longest_streak': 0}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get streaks')
+  function addMessage(text, sender) {
+    const container = document.getElementById('messagesContainer');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `message ${sender}`;
 
-@app.post('/streaks/log')
-def log_streak(request: Request):
-    try:
-        user = require_user(request)
-        today = datetime.now().date().isoformat()
-        
-        db = get_db()
-        try:
-            streak = db.execute('SELECT * FROM streaks WHERE user_id=?', (user['id'],)).fetchone()
-            
-            if not streak:
-                db.execute('INSERT OR IGNORE INTO streaks (user_id, current_streak, longest_streak, last_study_date) VALUES(?,?,?,?)',
-                          (user['id'], 1, 1, today))
-            else:
-                if streak['last_study_date'] != today:
-                    new_current = streak['current_streak'] + 1 if streak['last_study_date'] and \
-                                  (datetime.now().date() - datetime.fromisoformat(streak['last_study_date']).date()).days == 1 else 1
-                    new_longest = max(new_current, streak['longest_streak'])
-                    db.execute('UPDATE streaks SET current_streak=?, longest_streak=?, last_study_date=? WHERE user_id=?',
-                              (new_current, new_longest, today, user['id']))
-            
-            db.commit()
-            return {'status': 'ok'}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to log streak')
+    const avatar = sender === 'user' ? '👤' : '🤖';
+    const avatarClass = sender === 'user' ? 'user' : 'ai';
+    const safeText = escapeHtml(text).replace(/\n/g, '<br>');
 
-@app.get('/daily-report')
-def get_daily_report(request: Request):
-    try:
-        user = require_user(request)
-        today = datetime.now().date().isoformat()
-        
-        db = get_db()
-        try:
-            log = db.execute('SELECT * FROM daily_study_log WHERE user_id=? AND study_date=?',
-                            (user['id'], today)).fetchone()
-            
-            if not log:
-                return {'minutes': 0, 'points': 0}
-            
-            minutes = log['minutes_studied'] or 0
-            points = (minutes // 15) * 5
-            return {'minutes': minutes, 'points': points}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get report')
+    msgDiv.innerHTML = `
+      <div class="${sender === 'user' ? '' : 'avatar ' + avatarClass}${sender === 'user' ? '' : ''}">
+        ${sender === 'user' ? '' : avatar}
+      </div>
+      <div>
+        <div class="message-bubble">${safeText}</div>
+        <div class="message-time" style="${sender === 'user' ? 'text-align: right;' : ''}">${new Date().toLocaleTimeString()}</div>
+      </div>
+      ${sender === 'user' ? `<div class="avatar ${avatarClass}">${avatar}</div>` : ''}
+    `;
 
-@app.get('/daily-goal')
-def get_goal(request: Request):
-    try:
-        user = require_user(request)
-        today = datetime.now().date().isoformat()
-        
-        db = get_db()
-        try:
-            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
-                             (user['id'], today)).fetchone()
-            
-            if not goal:
-                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(?,?,?,?)',
-                          (user['id'], today, 60, 0))
-                db.commit()
-                goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
-                                 (user['id'], today)).fetchone()
-            
-            d = dict(goal)
-            progress = int((d['completed_minutes'] / d['goal_minutes']) * 100) if d['goal_minutes'] > 0 else 0
-            return {'goal_minutes': d['goal_minutes'], 'completed_minutes': d['completed_minutes'], 'progress': progress}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get goal')
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+  }
 
-@app.post('/daily-goal/update')
-def update_goal(req: dict, request: Request):
-    try:
-        user = require_user(request)
-        today = datetime.now().date().isoformat()
-        minutes = max(0, min(1440, int(req.get('minutes', 0))))
-        
-        db = get_db()
-        try:
-            goal = db.execute('SELECT * FROM daily_goals WHERE user_id=? AND goal_date=?',
-                             (user['id'], today)).fetchone()
-            
-            if goal:
-                db.execute('UPDATE daily_goals SET completed_minutes=completed_minutes+? WHERE user_id=? AND goal_date=?',
-                          (minutes, user['id'], today))
-            else:
-                db.execute('INSERT INTO daily_goals (user_id, goal_date, goal_minutes, completed_minutes) VALUES(?,?,?,?)',
-                          (user['id'], today, 60, minutes))
-            
-            db.commit()
-            return {'status': 'ok'}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to update goal')
+  function quickAsk(action) {
+    document.getElementById('messageInput').value = action;
+    sendMessage();
+  }
 
-@app.post('/notes/create')
-def note_create(req: dict, request: Request):
-    try:
-        user = require_user(request)
-        
-        title = validate_string(req.get('title', ''), 'title')
-        content = req.get('content', '').strip()
-        
-        if len(content) > 50000:
-            raise ValueError("Content too long")
-        
-        db = get_db()
-        try:
-            db.execute('INSERT INTO user_notes (user_id, title, content) VALUES(?,?,?)',
-                      (user['id'], title, content))
-            note_id = db.lastrowid
-            db.commit()
-            return {'status': 'ok', 'note_id': note_id}
-        finally:
-            db.close()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to create note')
+  function uploadPDF() {
+    const token = localStorage.getItem('chotu_token');
+    if (!token) {
+      window.location.href = '/login.html';
+      return;
+    }
+    document.getElementById('pdfFileInput').click();
+  }
 
-@app.get('/notes')
-def notes_get(request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            notes = db.execute('SELECT * FROM user_notes WHERE user_id=? ORDER BY updated_at DESC LIMIT 100', 
-                              (user['id'],)).fetchall()
-            return {'notes': [dict(n) for n in notes]}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get notes')
+  async function handlePdfSelected(event) {
+    const file = event.target.files[0];
+    event.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
 
-@app.delete('/notes/{note_id}')
-def delete_note(note_id: int, request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            db.execute('DELETE FROM user_notes WHERE id=? AND user_id=?', (note_id, user['id']))
-            db.commit()
-            return {'status': 'ok'}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to delete note')
+    const token = localStorage.getItem('chotu_token');
+    addMessage(`Uploading ${file.name}...`, 'user');
 
-@app.post('/focus-session/start')
-def focus_start(req: dict, request: Request):
-    try:
-        user = require_user(request)
-        subject = validate_string(req.get('subject', 'General'), 'subject', 1)
-        duration = max(1, min(120, int(req.get('duration', 25))))
-        
-        db = get_db()
-        try:
-            db.execute('INSERT INTO focus_sessions (user_id, subject, duration_minutes) VALUES(?,?,?)',
-                      (user['id'], subject, duration))
-            sid = db.lastrowid
-            db.commit()
-            return {'session_id': sid, 'duration': duration}
-        finally:
-            db.close()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to start focus')
+    const formData = new FormData();
+    formData.append('file', file);
 
-@app.post('/focus-session/{session_id}/end')
-def focus_end(session_id: int, req: dict, request: Request):
-    try:
-        user = require_user(request)
-        duration = max(1, min(120, int(req.get('duration', 25))))
-        
-        db = get_db()
-        try:
-            session = db.execute('SELECT * FROM focus_sessions WHERE id=? AND user_id=?',
-                               (session_id, user['id'])).fetchone()
-            
-            if not session:
-                raise HTTPException(status_code=404, detail='Session not found')
-            
-            db.execute('UPDATE focus_sessions SET completed=TRUE, ended_at=datetime("now") WHERE id=? AND user_id=?',
-                      (session_id, user['id']))
-            
-            db.execute('INSERT INTO study_history (user_id, subject, session_type, duration_minutes) VALUES(?,?,?,?)',
-                      (user['id'], session['subject'], 'focus', duration))
-            
-            today = datetime.now().date().isoformat()
-            db.execute('''INSERT INTO daily_goals (user_id, goal_date, completed_minutes) VALUES(?,?,?)
-                          ON CONFLICT(user_id, goal_date) DO UPDATE SET completed_minutes=completed_minutes+?''',
-                      (user['id'], today, duration, duration))
-            
-            db.commit()
-            return {'status': 'ok'}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to end focus')
+    try {
+      const response = await fetch('/upload/pdf', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
 
-@app.post('/upload/pdf')
-async def upload_pdf(file: UploadFile = File(...), request: Request = None):
-    try:
-        user = require_user(request)
-        
-        if not file.filename.endswith('.pdf'):
-            raise HTTPException(status_code=400, detail='Only PDFs allowed')
-        
-        content = await file.read()
-        if len(content) > MAX_PDF_SIZE:
-            raise HTTPException(status_code=413, detail='File too large')
-        
-        file_path = os.path.join(UPLOADS_DIR, f"{user['id']}_{secrets.token_hex(4)}_{file.filename[:30]}")
-        with open(file_path, 'wb') as f:
-            f.write(content)
-        
-        try:
-            doc = fitz.open(file_path)
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            text = text[:1000000]
-        except Exception as e:
-            logger.error(f"PDF extraction failed for {file.filename}: {e}")
-            raise HTTPException(status_code=400, detail='Cannot extract PDF text')
-        
-        if not text:
-            raise HTTPException(status_code=400, detail='No text in PDF')
-        
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        chunks = []
-        current_chunk = ""
-        
-        for sentence in sentences[:1000]:
-            if len(current_chunk) + len(sentence) < 512:
-                current_chunk += " " + sentence
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip()[:512])
-                current_chunk = sentence
-        
-        if current_chunk:
-            chunks.append(current_chunk.strip()[:512])
-        
-        chunks = chunks[:100]
-        
-        db = get_db()
-        try:
-            db.execute('INSERT INTO pdf_documents (user_id, filename, file_path, file_size) VALUES(?,?,?,?)',
-                      (user['id'], file.filename[:255], file_path, len(content)))
-            db.commit()
-            
-            doc_id = db.lastrowid
-            
-            for i, chunk in enumerate(chunks):
-                embedding = rag.embed(chunk)
-                db.execute('INSERT INTO document_chunks (document_id, chunk_text, chunk_index, embedding) VALUES(?,?,?,?)',
-                          (doc_id, chunk, i, embedding.tobytes()))
-            
-            db.commit()
-            return {'status': 'ok', 'chunks': len(chunks), 'document_id': doc_id}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='PDF upload failed')
+      if (response.status === 401) {
+        localStorage.removeItem('chotu_token');
+        window.location.href = '/login.html';
+        return;
+      }
 
-@app.post('/chat/ask')
-def chat_ask(req: dict, request: Request):
-    try:
-        user = require_user(request)
-        question = validate_string(req.get('question', ''), 'question', 3, 500)
-        
-        db = get_db()
-        try:
-            chunks_data = db.execute('''SELECT dc.chunk_text FROM document_chunks dc
-                                       JOIN pdf_documents pd ON dc.document_id = pd.id
-                                       WHERE pd.user_id = ? LIMIT 100''', (user['id'],)).fetchall()
-            
-            chunks = [row['chunk_text'] for row in chunks_data] if chunks_data else []
-            
-            relevant_chunks = []
-            confidence = 0
-            
-            if chunks:
-                results = rag.hybrid_search(question, chunks, top_k=3)
-                relevant_chunks = [r['text'] for r in results]
-                confidence = int(sum(r['confidence'] for r in results) / len(results)) if results else 0
-            
-            context = "\n".join(relevant_chunks)
-            
-            try:
-                params = {'action': 'query', 'format': 'json', 'titles': question.split()[0][:50],
-                         'prop': 'extracts', 'explaintext': True, 'exintro': True}
-                resp = requests.get("https://en.wikipedia.org/w/api.php", params=params, timeout=5)
-                wiki = ""
-                if resp.ok:
-                    data = resp.json()
-                    for page_data in data['query']['pages'].values():
-                        if 'extract' in page_data:
-                            wiki = page_data['extract'][:500]
-                            break
-                context += "\n" + wiki
-            except:
-                pass
-            
-            answer = None
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${response.status}: ${errText}`);
+      }
 
-            if GROQ_API_KEY:
-                try:
-                    from groq import Groq
-                    client = Groq(api_key=GROQ_API_KEY)
-                    prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
-                    response = client.chat.completions.create(model="llama-3.3-70b-versatile",
-                                                             messages=[{"role": "user", "content": prompt}],
-                                                             max_tokens=500, temperature=0.7)
-                    answer = response.choices[0].message.content
-                except Exception as e:
-                    logger.error(f"Groq call failed: {e}")
+      const data = await response.json();
+      addMessage(`Uploaded and processed "${file.name}" — ${data.chunks} chunks extracted. You can ask questions about it now.`, 'ai');
+    } catch (err) {
+      addMessage(`⚠️ Upload failed: ${err.message}`, 'ai');
+    }
+  }
 
-            if answer is None:
-                if not GROQ_API_KEY:
-                    answer = "I can't reach the AI backend right now — GROQ_API_KEY isn't set on the server. Ask whoever runs this to add it."
-                elif context:
-                    answer = "I hit an error calling the AI model, but here's what I found in your materials:\n\n" + context[:500]
-                else:
-                    answer = "I hit an error calling the AI model and don't have any study materials uploaded for this yet. Try again in a moment, or upload a relevant PDF."
-            
-            db.execute('''INSERT INTO chat_history (user_id, question, answer, relevant_chunks, relevance_score, confidence)
-                         VALUES(?,?,?,?,?,?)''',
-                      (user['id'], question, answer[:2000], json.dumps(relevant_chunks[:3]), 
-                       sum(r['score'] for r in rag.hybrid_search(question, chunks, top_k=3)) / max(1, len(rag.hybrid_search(question, chunks, top_k=3))) if chunks else 0,
-                       confidence))
-            db.commit()
-            
-            return {'status': 'ok', 'answer': answer[:2000], 'relevant_chunks': relevant_chunks[:3], 'confidence': confidence}
-        finally:
-            db.close()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Chat failed')
+  function newChat() {
+    document.getElementById('messagesContainer').innerHTML = `
+      <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+        <div style="font-size: 40px; margin-bottom: 12px;">🎓</div>
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">New Conversation</div>
+        <div style="font-size: 13px;">Start by uploading a PDF or asking a question</div>
+      </div>
+    `;
+  }
 
-@app.get('/chat/history')
-def chat_history(request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            history = db.execute('''SELECT * FROM chat_history WHERE user_id=?
-                                   ORDER BY created_at DESC LIMIT 50''', (user['id'],)).fetchall()
-            return {'history': [dict(h) for h in history]}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get history')
+  function toggleSettings() {
+    document.getElementById('settingsModal').classList.toggle('active');
+  }
 
-@app.get('/leaderboard/global')
-def leaderboard():
-    try:
-        db = get_db()
-        try:
-            users = db.execute('SELECT * FROM leaderboard ORDER BY total_points DESC LIMIT 100').fetchall()
-            return {'leaderboard': [dict(u) for u in users]}
-        finally:
-            db.close()
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get leaderboard')
+  function showSettings() {
+    toggleSettings();
+  }
 
-@app.get('/notifications')
-def get_notifications(request: Request):
-    try:
-        user = require_user(request)
-        db = get_db()
-        try:
-            n = db.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 50', 
-                          (user['id'],)).fetchall()
-            return {'notifications': [dict(x) for x in n]}
-        finally:
-            db.close()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail='Failed to get notifications')
+  function downloadChat() {
+    alert('Download chat is not built yet.');
+  }
 
-if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 8000)))
+  function shareChat() {
+    alert('Share chat is not built yet.');
+  }
+
+  async function logout() {
+    if (!confirm('Are you sure you want to logout?')) return;
+    const token = localStorage.getItem('chotu_token');
+    try {
+      if (token) {
+        await fetch('/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      // even if the server call fails, still clear locally so the user isn't stuck
+    }
+    localStorage.removeItem('chotu_token');
+    localStorage.removeItem('chotu_user');
+    window.location.href = '/login.html';
+  }
+</script>
+
+</body>
+</html>

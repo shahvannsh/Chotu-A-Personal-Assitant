@@ -296,6 +296,19 @@ def add_note(payload: dict):
         save_memory(mem)
     return {"status": "ok"}
 
+@app.post('/debug/set-groq-key')
+def debug_set_key(req: dict, request: Request):
+    user = require_user(request)
+    key = req.get('groq_key', '').strip()
+    if not key:
+        raise HTTPException(status_code=400, detail='groq_key required')
+    db = get_db()
+    try:
+        db.execute('UPDATE users SET groq_key=? WHERE id=?', (key, user['id']))
+        db.commit()
+        return {'status': 'ok'}
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     print("\n  CHOTU is online. http://localhost:8000\n")

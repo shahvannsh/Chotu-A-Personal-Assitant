@@ -146,12 +146,19 @@ function getDayLabel(offsetDays) {
 
 async function load() {
   try {
-    var res = await fetch('/sessions');
+    var token = localStorage.getItem('chotu_token');
+    if (!token) { window.location.href = '/login.html'; return; }
+    var res = await fetch('/focus-sessions', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (res.status === 401) {
+      localStorage.removeItem('chotu_token');
+      window.location.href = '/login.html';
+      return;
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     render(data);
   } catch(e) {
-    document.getElementById('page').innerHTML = '<div class="loading">failed to load — is Chotu running? open <a href="http://localhost:8000/history" style="color:var(--accent)">localhost:8000/history</a></div>';
+    document.getElementById('page').innerHTML = '<div class="loading">Failed to load session history: ' + escHtml(e.message) + '</div>';
   }
 }
 

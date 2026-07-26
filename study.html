@@ -290,20 +290,8 @@ function setMode(m) {
 async function startQuiz() {
   var notes = document.getElementById('quizNotes').value.trim();
   if (!notes) { appendSystem('Paste some notes first bhai, tabhi quiz banega.'); return; }
-  appendSystem('Generating 5 questions from your notes...');
-  var typingEl = appendTyping();
-  try {
-    var res  = await fetch('/study/quiz', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes:notes, subject:currentSubject})});
-    var data = await res.json();
-    typingEl.remove();
-    if (!res.ok) throw new Error(data.detail || 'failed');
-    quizQuestions = data.questions;
-    quizIndex = 0; quizActive = true; waitingForAns = false;
-    setMode('quiz');
-    updateQuizProgress();
-    appendSystem('Quiz ready! ' + quizQuestions.length + ' questions. Let\'s go.');
-    askQuestion();
-  } catch(e) { typingEl.remove(); appendSystem('Error: ' + e.message); }
+  appendSystem("Quiz generation isn't built on the backend yet — there's no AI grading or question-generation endpoint. This UI is ready; the backend work for it hasn't been done.");
+  return;
 }
 
 function askQuestion() {
@@ -370,12 +358,16 @@ async function sendMessage() {
   var typingEl = appendTyping();
 
   try {
-    var res  = await fetch('/study/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg, subject:currentSubject, history:studyHistory.slice(-10)})});
+    const token = localStorage.getItem('chotu_token');
+    if (!token) { window.location.href = '/login.html'; return; }
+    var question = currentSubject ? `[Subject: ${currentSubject}] ${msg}` : msg;
+    var res  = await fetch('/chat/ask', {method:'POST', headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${token}`}, body:JSON.stringify({question:question})});
+    if (res.status === 401) { localStorage.removeItem('chotu_token'); window.location.href = '/login.html'; return; }
     var data = await res.json();
     typingEl.remove();
     if (!res.ok) throw new Error(data.detail || 'server error');
-    appendMsg('assistant', data.reply);
-    studyHistory.push({role:'assistant', content:data.reply});
+    appendMsg('assistant', data.answer);
+    studyHistory.push({role:'assistant', content:data.answer});
   } catch(e) { typingEl.remove(); appendMsg('assistant', 'error: ' + e.message); }
   document.getElementById('sendBtn').disabled = false;
 }

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chotu — Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #FF6B6B;
+    --secondary: #4ECDC4;
+    --accent: #FFE66D;
+    --dark: #0f1419;
+    --darker: #0a0d12;
+    --text-primary: #e8eef2;
+    --text-secondary: #a8b2bf;
+    --border: #1e2835;
+    --success: #00d66a;
+    --error: #ff5555;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--darker); z-index: 10;
+  }
+  .logo { font-weight: 700; font-size: 18px; color: var(--secondary); }
+  .nav-links { display: flex; gap: 8px; margin-left: 24px; }
+  .nav-btn {
+    font-size: 12px; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+    background: transparent; cursor: pointer; text-decoration: none;
+  }
+  .nav-btn:hover, .nav-btn.active { border-color: var(--secondary); color: var(--secondary); }
+  .page { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+  .page-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+  .page-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 24px; }
+
+  .note-form {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 28px;
+  }
+  .note-form input, .note-form textarea {
+    width: 100%; background: var(--darker); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-primary); font-family: inherit;
+    font-size: 14px; padding: 10px 12px; outline: none; margin-bottom: 10px;
+  }
+  .note-form input:focus, .note-form textarea:focus { border-color: var(--secondary); }
+  .note-form textarea { min-height: 90px; resize: vertical; }
+  .note-form button {
+    background: var(--secondary); color: #04121a; border: none;
+    border-radius: 6px; padding: 10px 20px; font-weight: 600;
+    font-size: 13px; cursor: pointer;
+  }
+  .note-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .form-error { color: var(--error); font-size: 12px; margin-bottom: 8px; display: none; }
+  .form-error.visible { display: block; }
+
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .note-card {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; position: relative;
+  }
+  .note-title { font-weight: 600; font-size: 14px; margin-bottom: 8px; padding-right: 24px; word-break: break-word; }
+  .note-content { color: var(--text-secondary); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow-y: auto; margin-bottom: 10px; }
+  .note-time { color: var(--text-secondary); font-size: 11px; opacity: 0.7; }
+  .note-delete {
+    position: absolute; top: 12px; right: 12px; background: transparent;
+    border: none; color: var(--text-secondary); cursor: pointer; font-size: 14px;
+    opacity: 0.5; padding: 2px 6px; border-radius: 4px;
+  }
+  .note-delete:hover { opacity: 1; color: var(--error); background: rgba(255,85,85,0.1); }
+
+  .empty-state, .loading-state {
+    text-align: center; color: var(--text-secondary); font-size: 13px;
+    padding: 60px 20px; border: 1px dashed var(--border); border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">CHOTU</div>
+  <div class="nav-links">
+    <a class="nav-btn" href="/dashboard.html">Dashboard</a>
+    <a class="nav-btn" href="/index.html">AI Chat</a>
+    <a class="nav-btn" href="/study.html">Study</a>
+    <a class="nav-btn" href="/history.html">History</a>
+    <a class="nav-btn active" href="/notes.html">Notes</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-title">Notes</div>
+  <div class="page-subtitle">Saved directly to your account — real data, not a mockup.</div>
+
+  <div class="note-form">
+    <div class="form-error" id="formError"></div>
+    <input type="text" id="noteTitle" placeholder="Title" maxlength="200"/>
+    <textarea id="noteContent" placeholder="Write something..."></textarea>
+    <button id="saveBtn" onclick="createNote()">Save Note</button>
+  </div>
+
+  <div id="notesContainer">
+    <div class="loading-state">Loading notes...</div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('chotu_token');
+  if (!token) {
+    window.location.href = '/login.html';
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function timeAgo(isoString) {
+    if (!isoString) return '';
+    const then = new Date(isoString.replace(' ', 'T'));
+    const diffMs = Date.now() - then.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
+  async function authedFetch(path, options = {}) {
+    options.headers = Object.assign({ 'Authorization': `Bearer ${token}` }, options.headers || {});
+    const res = await fetch(path, options);
+    if (res.status === 401) {
+      localStorage.removeItem('chotu_token');
+      window.location.href = '/login.html';
+      throw new Error('Session expired');
+    }
+    return res;
+  }
+
+  function renderNotes(notes) {
+    const container = document.getElementById('notesContainer');
+    if (!notes.length) {
+      container.innerHTML = '<div class="empty-state">No notes yet — save your first one above.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="notes-grid">' + notes.map(n => `
+      <div class="note-card">
+        <button class="note-delete" onclick="deleteNote(${n.id})" title="Delete">✕</button>
+        <div class="note-title">${escapeHtml(n.title || 'Untitled')}</div>
+        <div class="note-content">${escapeHtml(n.content || '')}</div>
+        <div class="note-time">${timeAgo(n.updated_at || n.created_at)}</div>
+      </div>
+    `).join('') + '</div>';
+  }
+
+  async function loadNotes() {
+    try {
+      const res = await authedFetch('/notes');
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      renderNotes(data.notes || []);
+    } catch (e) {
+      document.getElementById('notesContainer').innerHTML =
+        `<div class="empty-state">Failed to load notes: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  async function createNote() {
+    const titleEl = document.getElementById('noteTitle');
+    const contentEl = document.getElementById('noteContent');
+    const errEl = document.getElementById('formError');
+    const btn = document.getElementById('saveBtn');
+    const title = titleEl.value.trim();
+    const content = contentEl.value.trim();
+
+    errEl.classList.remove('visible');
+
+    if (!title) {
+      errEl.textContent = 'Title is required.';
+      errEl.classList.add('visible');
+      return;
+    }
+    if (content.length > 50000) {
+      errEl.textContent = 'Content is too long (max 50,000 characters).';
+      errEl.classList.add('visible');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const res = await authedFetch('/notes/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `${res.status}`);
+
+      titleEl.value = '';
+      contentEl.value = '';
+      await loadNotes();
+    } catch (e) {
+      errEl.textContent = `Failed to save: ${e.message}`;
+      errEl.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Note';
+    }
+  }
+
+  async function deleteNote(id) {
+    if (!confirm('Delete this note?')) return;
+    try {
+      const res = await authedFetch(`/notes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`${res.status}`);
+      await loadNotes();
+    } catch (e) {
+      alert(`Failed to delete note: ${e.message}`);
+    }
+  }
+
+  loadNotes();
+</script>
+
+</body>
+</html>

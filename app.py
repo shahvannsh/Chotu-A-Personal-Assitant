@@ -581,6 +581,10 @@ def study_html():
 def history_html():
     return FileResponse('history.html')
 
+@app.get('/notes.html')
+def notes_html_page():
+    return FileResponse('notes.html')
+
 @app.get('/health')
 def health():
     return {'status': 'ok', 'version': '2.0.1', 'timestamp': datetime.now().isoformat()}

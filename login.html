@@ -4,18 +4,18 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Chotu — Sign In</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{--bg:#080c10;--surface:#0d1117;--accent:#00c8ff;--text:#c9d1d9;--text-hi:#e6edf3;--text-dim:#4a5568;--border:#1a2332;--mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;}
+:root{--bg:#0E1628;--surface:#111D35;--accent:#E01020;--text:#F0EDE6;--text-hi:#F0EDE6;--text-dim:rgba(240,237,230,0.45);--border:#1A2F6E;--mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;--logo-font:'Bangers',cursive;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;align-items:center;justify-content:center;}
-body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,200,255,0.01) 2px,rgba(0,200,255,0.01) 4px);pointer-events:none;}
-body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(0,200,255,0.06) 0%,transparent 60%);pointer-events:none;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(224,16,32,0.02) 2px,rgba(224,16,32,0.02) 4px);pointer-events:none;}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(224,16,32,0.08) 0%,transparent 60%);pointer-events:none;}
 
-.card{position:relative;z-index:1;background:var(--surface);border:1px solid #243447;border-radius:12px;padding:48px 40px;width:380px;max-width:95vw;text-align:center;box-shadow:0 0 60px rgba(0,200,255,0.08);}
+.card{position:relative;z-index:1;background:var(--surface);border:1px solid #1A2F6E;border-radius:12px;padding:48px 40px;width:380px;max-width:95vw;text-align:center;box-shadow:0 0 60px rgba(224,16,32,0.10);}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);border-radius:12px 12px 0 0;}
 
-.logo{font-family:var(--mono);font-size:32px;color:var(--accent);letter-spacing:6px;text-shadow:0 0 30px rgba(0,200,255,0.4);margin-bottom:6px;}
+.logo{font-family:var(--logo-font);font-size:38px;color:var(--accent);letter-spacing:4px;text-shadow:2px 2px 0 #9B0A18;margin-bottom:6px;}
 .tagline{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:2px;margin-bottom:40px;}
 
 .divider{display:flex;align-items:center;gap:12px;margin-bottom:28px;}

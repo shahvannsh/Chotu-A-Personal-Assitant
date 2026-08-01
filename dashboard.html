@@ -443,6 +443,10 @@
         <span>📝</span>
         <span>Notes</span>
       </button>
+      <button class="nav-item" onclick="location.href='/history.html'">
+        <span>📊</span>
+        <span>History</span>
+      </button>
       <button class="nav-item" onclick="alert('Flashcards aren\'t built yet.')">
         <span>🃏</span>
         <span>Flashcards</span>
@@ -820,6 +824,119 @@ function chotuApplyTheme(key){
   chotuApplyTheme(current);
 })();
 </script>
+
+<!-- ═══ CTRL+K SEARCH WIDGET ═══ -->
+<div id="ckOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,18,32,0.75);backdrop-filter:blur(4px);z-index:9999;align-items:flex-start;justify-content:center;padding-top:12vh;">
+  <div style="width:min(560px,90vw);background:#0E1628;border:1px solid rgba(240,237,230,0.14);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(240,237,230,0.14);">
+      <span style="color:rgba(240,237,230,0.4);font-size:15px;">⌕</span>
+      <input id="ckInput" type="text" placeholder="Search notes, exams, chat history…" autocomplete="off"
+        style="flex:1;background:transparent;border:none;outline:none;color:#F0EDE6;font-family:inherit;font-size:15px;"/>
+      <span style="font-family:monospace;font-size:10px;color:rgba(240,237,230,0.35);border:1px solid rgba(240,237,230,0.2);border-radius:4px;padding:2px 6px;">ESC</span>
+    </div>
+    <div id="ckResults" style="max-height:50vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<button id="ckTrigger" title="Search (Ctrl+K)" onclick="ckOpen()"
+  style="position:fixed;bottom:22px;right:22px;z-index:998;width:44px;height:44px;border-radius:50%;background:#0E1628;border:1px solid rgba(240,237,230,0.18);color:#F0EDE6;font-size:16px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.35);">⌕</button>
+
+<script>
+(function(){
+  const overlay = document.getElementById('ckOverlay');
+  const input = document.getElementById('ckInput');
+  const resultsEl = document.getElementById('ckResults');
+  let debounceTimer = null;
+  let items = [];
+  let activeIndex = -1;
+
+  window.ckOpen = function(){
+    overlay.style.display = 'flex';
+    input.value = '';
+    resultsEl.innerHTML = '';
+    items = []; activeIndex = -1;
+    setTimeout(() => input.focus(), 30);
+  };
+
+  function ckClose(){
+    overlay.style.display = 'none';
+  }
+
+  function typeIcon(type){
+    return { note: '📝', exam: '🎯', chat: '💬' }[type] || '•';
+  }
+
+  function render(){
+    if (!items.length) {
+      resultsEl.innerHTML = input.value.trim()
+        ? '<div style="padding:24px 16px;color:rgba(240,237,230,0.4);font-size:13px;text-align:center;">No results</div>'
+        : '<div style="padding:24px 16px;color:rgba(240,237,230,0.3);font-size:13px;text-align:center;">Type to search your notes, exams, and chat history</div>';
+      return;
+    }
+    resultsEl.innerHTML = items.map((r, i) => `
+      <div class="ck-item" data-idx="${i}" onclick="ckGo(${i})"
+        style="display:flex;gap:10px;padding:10px 16px;cursor:pointer;border-left:2px solid ${i===activeIndex ? '#E01020' : 'transparent'};background:${i===activeIndex ? 'rgba(240,237,230,0.05)' : 'transparent'};">
+        <span style="font-size:15px;line-height:1.4;">${typeIcon(r.type)}</span>
+        <div style="min-width:0;">
+          <div style="color:#F0EDE6;font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.title || 'Untitled')}</div>
+          <div style="color:rgba(240,237,230,0.45);font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.snippet || '')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  window.ckGo = function(i){
+    const r = items[i];
+    if (!r) return;
+    ckClose();
+    window.location.href = r.url;
+  };
+
+  async function doSearch(q){
+    const token = localStorage.getItem('chotu_token');
+    if (!token || !q.trim()) { items = []; render(); return; }
+    try {
+      const res = await fetch('/search?q=' + encodeURIComponent(q), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) { items = []; render(); return; }
+      const data = await res.json();
+      items = data.results || [];
+      activeIndex = items.length ? 0 : -1;
+      render();
+    } catch(e) {
+      items = []; render();
+    }
+  }
+
+  input && input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value;
+    debounceTimer = setTimeout(() => doSearch(q), 200);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      overlay.style.display === 'flex' ? ckClose() : ckOpen();
+      return;
+    }
+    if (overlay.style.display !== 'flex') return;
+    if (e.key === 'Escape') { ckClose(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { activeIndex = (activeIndex + 1) % items.length; render(); } }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { activeIndex = (activeIndex - 1 + items.length) % items.length; render(); } }
+    if (e.key === 'Enter') { e.preventDefault(); if (activeIndex >= 0) ckGo(activeIndex); }
+  });
+
+  overlay && overlay.addEventListener('click', (e) => { if (e.target === overlay) ckClose(); });
+})();
+</script>
+<!-- ═══ /CTRL+K SEARCH WIDGET ═══ -->
 
 </body>
 </html>

@@ -1,3 +1,11 @@
+"""
+NOT USED. Do not run this file.
+
+This is an older SQLite-based prototype, superseded by app.py (FastAPI +
+Postgres, split across core.py / routers/*.py). Procfile already points
+at app.py; start.bat and launch_chotu.bat were fixed to do the same.
+Kept only for history — delete once you've confirmed nothing references it.
+"""
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse

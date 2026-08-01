@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo  ================================
-echo   JARVIS - Starting up...
+echo   CHOTU - Starting up...
 echo  ================================
 echo.
 
@@ -12,7 +12,8 @@ pip install -r requirements.txt --quiet
 timeout /t 2 /nobreak > nul
 start http://localhost:8000
 
-:: Start server
-python server.py
+:: Start server (real entrypoint - see app.py; server.py is an old
+:: unused version, do not point this at it)
+python app.py
 
 pause

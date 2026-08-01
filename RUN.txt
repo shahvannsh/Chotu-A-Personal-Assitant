@@ -1,0 +1,179 @@
+CHOTU — HOW TO RUN THIS PROJECT
+================================
+
+This app needs a real PostgreSQL database. There is no SQLite fallback —
+core.py will refuse to start without a working DATABASE_URL.
+
+Two ways to run it: locally with Python, or with Docker. Docker is the
+one that's actually been verified end-to-end on Windows in this project's
+history — the local-Python path below is the standard equivalent, not
+separately verified by me.
+
+
+===========================================================
+OPTION A — DOCKER (recommended, this is the verified path)
+===========================================================
+
+Requirements:
+  - Docker Desktop installed and running (Windows: needs WSL2 +
+    virtualization enabled — see TROUBLESHOOTING below if the engine
+    won't start)
+  - A Groq API key from https://console.groq.com/keys
+
+1. Open a terminal in the project folder (where the Dockerfile is).
+
+2. Build the image:
+
+     docker build -t chotu .
+
+   First build takes 30-60+ minutes — it installs sentence-transformers,
+   which pulls in torch. Later builds are fast (cached layers).
+
+3. Create a Docker network so the app and database can talk to each
+   other by name:
+
+     docker network create chotu-net
+
+4. Start Postgres:
+
+     docker run -d --name chotu-db --network chotu-net -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=chotu postgres:16
+
+5. Start the app, pointing it at that database:
+
+     docker run -d --name chotu-app --network chotu-net -p 8000:8000 -e DATABASE_URL=postgresql://postgres:postgres@chotu-db:5432/chotu -e GROQ_API_KEY=YOUR_REAL_KEY_HERE chotu
+
+   IMPORTANT (Windows/PowerShell): do NOT put spaces around the `=` in
+   `-e KEY=value`. `-e GROQ_API_KEY = "..."` (with spaces) silently
+   breaks the whole command — PowerShell splits it into separate
+   arguments and Docker gets confused about which piece is the image
+   name. It must be `-e GROQ_API_KEY=gsk_xxxxx` with no spaces at all.
+
+6. Check it's actually up:
+
+     docker logs chotu-app
+
+   You want to see "Application startup complete." and no traceback.
+   If you see a traceback, paste it — don't assume it's fine.
+
+7. Open a browser to:
+
+     http://localhost:8000/login.html
+
+8. Sign up with a real email, name, and an 8+ character password
+   (first login for a new email creates the account).
+
+To stop everything:
+
+     docker stop chotu-app chotu-db
+
+To start it again later (no need to rebuild or recreate):
+
+     docker start chotu-db
+     docker start chotu-app
+
+To wipe and start completely fresh:
+
+     docker rm -f chotu-app chotu-db
+     docker network rm chotu-net
+   (then repeat steps 3-5)
+
+
+===========================================================
+OPTION B — RUN LOCALLY WITH PYTHON (no Docker)
+===========================================================
+
+Requirements:
+  - Python 3.11+ 
+  - PostgreSQL installed and running locally (or a remote Postgres you
+    have a connection string for)
+  - A Groq API key from https://console.groq.com/keys
+
+1. Create and activate a virtual environment:
+
+     python -m venv venv
+     venv\Scripts\activate          (Windows)
+     source venv/bin/activate       (macOS/Linux)
+
+2. Install dependencies:
+
+     pip install -r requirements.txt
+
+   This pulls in torch (via sentence-transformers) — expect it to take
+   a while and use a few GB of disk.
+
+3. Create a database:
+
+     createdb chotu
+
+   (or use pgAdmin / whatever Postgres tool you have — just create an
+   empty database named chotu, or any name you like)
+
+4. Set the required environment variables in this shell session:
+
+   Windows (PowerShell):
+     $env:DATABASE_URL = "postgresql://postgres:YOUR_PG_PASSWORD@localhost:5432/chotu"
+     $env:GROQ_API_KEY = "gsk_your_real_key"
+
+   macOS/Linux:
+     export DATABASE_URL="postgresql://postgres:YOUR_PG_PASSWORD@localhost:5432/chotu"
+     export GROQ_API_KEY="gsk_your_real_key"
+
+5. Run it:
+
+     python app.py
+
+   or equivalently:
+
+     uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+   (--reload is optional, useful for development — restarts on file
+   changes)
+
+6. Open http://localhost:8000/login.html and sign up as in step 8 above.
+
+
+===========================================================
+TROUBLESHOOTING
+===========================================================
+
+"DATABASE_URL environment variable is not set" on startup
+  You forgot to export/set it in the SAME terminal session you're
+  running the app from. It doesn't persist across terminal windows
+  unless you add it to your shell profile or a .env-loading mechanism.
+
+Chat gives "I hit an error calling the AI model" instead of a real
+answer
+  This means GROQ_API_KEY is missing, wrong, or the Groq API call
+  itself is failing (bad model name, rate limit, network block).
+  Check the server logs (docker logs chotu-app, or the terminal running
+  uvicorn locally) for the actual exception right after asking a
+  question — the chat UI itself won't show you the real error.
+
+Docker Desktop: "Virtualization support not detected" (Windows)
+  1. Check Task Manager → Performance → CPU → "Virtualization" should
+     say Enabled. If it says Disabled, enable Intel VT-x / AMD-V in
+     your BIOS/UEFI (reboot required).
+  2. If virtualization IS enabled but Docker still won't start, open
+     "Turn Windows features on or off" and make sure these are
+     checked: Virtual Machine Platform, Windows Subsystem for Linux,
+     and Hyper-V (if present). Reboot after changing these.
+  3. Check Windows Security → Core Isolation → Memory Integrity. If
+     it's ON, turn it OFF and reboot — this specifically conflicts
+     with Docker's virtualization on some machines.
+
+`docker` not recognized as a command
+  Docker Desktop isn't installed, or was installed but never fully
+  started once (which is what adds it to PATH). Open Docker Desktop
+  from the Start Menu, wait for it to fully start, then open a NEW
+  terminal window.
+
+"invalid reference format" on `docker run`
+  Almost always caused by a stray space, quote, or line break inside
+  one of your `-e KEY=value` flags. Copy the command as one single
+  line with no spaces around any `=`.
+
+Login says "Incorrect password" for an email you've never used before
+  You haven't — this only happens on a REPEAT login to an email that
+  already has an account. If it's truly your first time, double check
+  you're typing the email correctly (it's case-insensitive but must
+  match otherwise).

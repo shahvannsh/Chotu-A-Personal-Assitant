@@ -9,7 +9,7 @@ import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test")
 
-from app import validate_string, validate_email, validate_token, AdvancedRAG  # noqa: E402
+from core import validate_string, validate_email, validate_token, AdvancedRAG  # noqa: E402
 
 
 class TestValidateString:

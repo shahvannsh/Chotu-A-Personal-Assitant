@@ -133,6 +133,31 @@
       gap: 8px;
     }
 
+    .sidebar-nav-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 12px 16px 0 16px;
+    }
+
+    .sidebar-nav-row a {
+      display: block;
+      text-align: center;
+      padding: 8px 6px;
+      background: rgba(255, 107, 107, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 11px;
+      transition: all 0.3s;
+    }
+
+    .sidebar-nav-row a:hover {
+      background: rgba(255, 107, 107, 0.15);
+      color: var(--primary);
+    }
+
     .sidebar-footer button {
       flex: 1;
       padding: 10px;
@@ -607,6 +632,12 @@
       <div class="conversation-item">💻 Programming Tips</div>
     </div>
 
+    <div class="sidebar-nav-row">
+      <a href="/dashboard.html">📊 Dashboard</a>
+      <a href="/study.html">📚 Study</a>
+      <a href="/notes.html">📝 Notes</a>
+      <a href="/history.html">📊 History</a>
+    </div>
     <div class="sidebar-footer">
       <button onclick="showSettings()">⚙️ Settings</button>
       <button onclick="logout()">🚪 Logout</button>

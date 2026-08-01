@@ -1,4 +1,14 @@
-# ── PASTE THESE INTO server.py ────────────────────────────────────────────────
+# NOT WIRED IN — this is not a router and is not imported anywhere.
+# It's a leftover snippet meant to be hand-pasted into server.py, which is
+# itself dead (see the notice at the top of server.py). It references
+# names (`app`, `CLIENT`, `MODEL`, `BaseModel`) that aren't defined in this
+# file, so it will fail if you try to import or run it directly.
+#
+# If you want a real Study Coach endpoint, port this logic into a new
+# routers/study_coach.py that imports from core.py, the way the other
+# routers under routers/ do — don't paste it into anything.
+# ─────────────────────────────────────────────────────────────────────────────
+# ── ORIGINAL PASTE-ME NOTE (kept for reference) ───────────────────────────────
 # Add these 3 routes before the  if __name__ == "__main__":  line
 # Also add this route at the top with the other @app.get routes:
 #   @app.get("/study")

@@ -50,6 +50,11 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
       <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">EMAIL</label>
       <input id="loginEmail" type="email" placeholder="you@example.com" style="width:100%;margin-top:6px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-hi);font-family:var(--sans);font-size:14px;outline:none;"/>
     </div>
+    <div>
+      <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">PASSWORD</label>
+      <input id="loginPassword" type="password" placeholder="8+ characters" style="width:100%;margin-top:6px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-hi);font-family:var(--sans);font-size:14px;outline:none;"/>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:4px;">New email? This creates your account. Existing email? This must match.</div>
+    </div>
     <button id="loginBtn" onclick="doLogin()" style="width:100%;padding:14px 20px;background:var(--accent);border:none;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:15px;font-weight:600;color:#04121a;">Sign In</button>
   </div>
 
@@ -58,8 +63,9 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
     despite requirements.txt including authlib/google-auth. The old
     "Continue with Google" button linked to a route that doesn't exist for
     OAuth and would 405 immediately (it's a POST-only JSON endpoint).
-    This is a plain email+name login against POST /auth/login, matching
-    what the backend actually supports today.
+    This is email+name+password login against POST /auth/login. Password
+    is required as of the auth fix below — previously any email with no
+    password logged in as whichever account owned that email.
   -->
 
   <div class="features">
@@ -88,11 +94,18 @@ if (localStorage.getItem('chotu_token')) {
 async function doLogin() {
   const name = document.getElementById('loginName').value.trim();
   const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('errorMsg');
   const btn = document.getElementById('loginBtn');
 
   if (!email || !email.includes('@')) {
     errEl.textContent = 'Enter a valid email.';
+    errEl.classList.add('visible');
+    return;
+  }
+
+  if (!password || password.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.';
     errEl.classList.add('visible');
     return;
   }
@@ -105,7 +118,7 @@ async function doLogin() {
     const response = await fetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name: name || 'User' })
+      body: JSON.stringify({ email, name: name || 'User', password })
     });
 
     if (!response.ok) {

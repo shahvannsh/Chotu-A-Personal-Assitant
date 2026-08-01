@@ -5,7 +5,7 @@ import fitz
 
 from core import (
     get_db, require_user, validate_string, rag, logger,
-    UPLOADS_DIR, MAX_PDF_SIZE, GROQ_API_KEY,
+    UPLOADS_DIR, MAX_PDF_SIZE, GROQ_API_KEY, OLLAMA_BASE_URL, GEMINI_API_KEY,
 )
 
 router = APIRouter()
@@ -78,11 +78,55 @@ async def upload_pdf(file: UploadFile = File(...), request: Request = None):
         logger.error(f"PDF upload failed for {file.filename}: {e}")
         raise HTTPException(status_code=500, detail='PDF upload failed')
 
+@router.get('/models')
+def list_models(request: Request):
+    """Real availability only — no entry unless it actually responds right now."""
+    require_user(request)
+    models = []
+    if GROQ_API_KEY:
+        models.append({'provider': 'groq', 'model': 'llama-3.3-70b-versatile', 'label': 'Groq · Llama 3.3 70B'})
+    if GEMINI_API_KEY:
+        models.append({'provider': 'gemini', 'model': 'gemini-2.0-flash', 'label': 'Gemini · 2.0 Flash'})
+    try:
+        resp = requests.get(f'{OLLAMA_BASE_URL}/api/tags', timeout=2)
+        if resp.ok:
+            for m in resp.json().get('models', []):
+                models.append({'provider': 'ollama', 'model': m['name'], 'label': f"Ollama · {m['name']}"})
+    except Exception:
+        pass
+    return {'models': models}
+
+def _call_groq(prompt):
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(model="llama-3.3-70b-versatile",
+                                             messages=[{"role": "user", "content": prompt}],
+                                             max_tokens=500, temperature=0.7)
+    return response.choices[0].message.content
+
+def _call_ollama(prompt, model_name):
+    resp = requests.post(f'{OLLAMA_BASE_URL}/api/chat', json={
+        'model': model_name,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'stream': False,
+    }, timeout=60)
+    resp.raise_for_status()
+    return resp.json()['message']['content']
+
+def _call_gemini(prompt):
+    resp = requests.post(
+        f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}',
+        json={'contents': [{'parts': [{'text': prompt}]}]}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()['candidates'][0]['content']['parts'][0]['text']
+
 @router.post('/chat/ask')
 def chat_ask(req: dict, request: Request):
     try:
         user = require_user(request)
         question = validate_string(req.get('question', ''), 'question', 3, 500)
+        provider = req.get('provider', 'groq')
+        model_name = req.get('model', '')
 
         db = get_db()
         try:
@@ -119,20 +163,29 @@ def chat_ask(req: dict, request: Request):
 
             answer = None
 
-            if GROQ_API_KEY:
+            if provider == 'ollama' and model_name:
                 try:
-                    from groq import Groq
-                    client = Groq(api_key=GROQ_API_KEY)
+                    answer = _call_ollama(f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer.", model_name)
+                except Exception as e:
+                    logger.error(f"Ollama call failed: {e}")
+            elif provider == 'gemini' and GEMINI_API_KEY:
+                try:
+                    answer = _call_gemini(f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer.")
+                except Exception as e:
+                    logger.error(f"Gemini call failed: {e}")
+            elif GROQ_API_KEY:
+                try:
                     prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
-                    response = client.chat.completions.create(model="llama-3.3-70b-versatile",
-                                                             messages=[{"role": "user", "content": prompt}],
-                                                             max_tokens=500, temperature=0.7)
-                    answer = response.choices[0].message.content
+                    answer = _call_groq(prompt)
                 except Exception as e:
                     logger.error(f"Groq call failed: {e}")
 
             if answer is None:
-                if not GROQ_API_KEY:
+                if provider == 'ollama':
+                    answer = f"Couldn't reach Ollama at {OLLAMA_BASE_URL} (or model '{model_name}' isn't pulled). Check it's running and the model name is right."
+                elif provider == 'gemini':
+                    answer = "Gemini call failed — check GEMINI_API_KEY is set and valid."
+                elif not GROQ_API_KEY:
                     answer = "I can't reach the AI backend right now — GROQ_API_KEY isn't set on the server. Ask whoever runs this to add it."
                 elif context:
                     answer = "I hit an error calling the AI model, but here's what I found in your materials:\n\n" + context[:500]

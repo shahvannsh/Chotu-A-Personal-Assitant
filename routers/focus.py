@@ -50,7 +50,7 @@ def focus_end(session_id: int, req: dict, request: Request):
 
             today = datetime.now().date().isoformat()
             db.execute('''INSERT INTO daily_goals (user_id, goal_date, completed_minutes) VALUES(%s,%s,%s)
-                          ON CONFLICT(user_id, goal_date) DO UPDATE SET completed_minutes=completed_minutes+%s''',
+                          ON CONFLICT(user_id, goal_date) DO UPDATE SET completed_minutes=daily_goals.completed_minutes+%s''',
                       (user['id'], today, duration, duration))
 
             db.commit()

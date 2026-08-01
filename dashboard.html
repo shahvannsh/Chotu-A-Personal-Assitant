@@ -505,6 +505,43 @@
         </div>
       </div>
 
+      <!-- FOCUS TIMER -->
+      <div class="grid">
+        <div class="card" id="focusCard">
+          <div class="card-header">
+            <div class="card-title">⏱️ Focus Session</div>
+            <div id="focusIdleBadge" style="display:none;font-size:11px;color:#ffa500;">Still there? 👋</div>
+          </div>
+          <div class="card-body" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+            <div style="position:relative;width:150px;height:150px;flex-shrink:0;">
+              <svg width="150" height="150" style="transform:rotate(-90deg);">
+                <circle cx="75" cy="75" r="66" stroke="var(--border)" stroke-width="10" fill="none"/>
+                <circle id="focusRing" cx="75" cy="75" r="66" stroke="var(--primary,#E01020)" stroke-width="10" fill="none"
+                  stroke-dasharray="414.7" stroke-dashoffset="0" stroke-linecap="round" style="transition:stroke-dashoffset 1s linear;"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--text-primary);" id="focusTimeDisplay">25:00</div>
+            </div>
+            <div style="flex:1;min-width:220px;">
+              <input id="focusTaskName" type="text" placeholder="What are you working on?" maxlength="100"
+                style="width:100%;padding:8px 10px;background:var(--darker,#0B1220);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;margin-bottom:10px;"/>
+              <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;" id="focusPresets">
+                <button class="nav-btn focus-preset active" data-min="25" onclick="focusSetPreset(25,this)">25 min</button>
+                <button class="nav-btn focus-preset" data-min="50" onclick="focusSetPreset(50,this)">50 min</button>
+                <button class="nav-btn focus-preset" data-min="90" onclick="focusSetPreset(90,this)">90 min</button>
+                <input id="focusCustomMin" type="number" min="1" max="120" placeholder="custom"
+                  style="width:70px;padding:6px 8px;background:var(--darker,#0B1220);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;"
+                  onchange="focusSetPreset(parseInt(this.value)||25,null)"/>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button id="focusStartBtn" onclick="focusStart()" style="padding:8px 18px;background:var(--primary,#E01020);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:13px;">Start</button>
+                <button id="focusStopBtn" onclick="focusStop()" style="display:none;padding:8px 18px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);cursor:pointer;font-size:13px;">Stop &amp; Save</button>
+              </div>
+              <div id="focusStatus" style="margin-top:8px;font-size:12px;color:var(--text-secondary);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- CHARTS & ANALYTICS -->
       <div class="grid grid-2">
         <div class="card">
@@ -824,6 +861,127 @@ function chotuApplyTheme(key){
   chotuApplyTheme(current);
 })();
 </script>
+
+<!-- ═══ FOCUS TIMER LOGIC ═══ -->
+<script>
+(function(){
+  const RING_CIRC = 414.7;
+  let focusMinutes = 25;
+  let focusSecondsLeft = 25 * 60;
+  let focusTotalSeconds = 25 * 60;
+  let focusInterval = null;
+  let focusSessionId = null;
+  let focusStartedAt = null;
+  let lastActivity = Date.now();
+  const IDLE_THRESHOLD_MS = 60000; // 60s of no mouse/keyboard = idle badge
+
+  document.addEventListener('mousemove', () => { lastActivity = Date.now(); });
+  document.addEventListener('keydown', () => { lastActivity = Date.now(); });
+
+  function fmtTime(totalSeconds){
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  function updateRing(){
+    const ring = document.getElementById('focusRing');
+    const display = document.getElementById('focusTimeDisplay');
+    if (!ring || !display) return;
+    const frac = focusTotalSeconds > 0 ? (focusTotalSeconds - focusSecondsLeft) / focusTotalSeconds : 0;
+    ring.style.strokeDashoffset = RING_CIRC * frac;
+    display.textContent = fmtTime(focusSecondsLeft);
+  }
+
+  window.focusSetPreset = function(minutes, btnEl){
+    if (focusInterval) return; // don't let preset changes mess with a running timer
+    focusMinutes = Math.max(1, Math.min(120, minutes));
+    focusSecondsLeft = focusMinutes * 60;
+    focusTotalSeconds = focusSecondsLeft;
+    document.querySelectorAll('.focus-preset').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    updateRing();
+  };
+
+  window.focusStart = async function(){
+    const token = localStorage.getItem('chotu_token');
+    if (!token) { window.location.href = '/login.html'; return; }
+    const task = document.getElementById('focusTaskName').value.trim() || 'General';
+    const statusEl = document.getElementById('focusStatus');
+
+    try {
+      const res = await fetch('/focus-session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ subject: task, duration: focusMinutes })
+      });
+      if (!res.ok) { statusEl.textContent = 'Could not start session — try again.'; return; }
+      const data = await res.json();
+      focusSessionId = data.session_id;
+      focusStartedAt = Date.now();
+      focusSecondsLeft = focusMinutes * 60;
+      focusTotalSeconds = focusSecondsLeft;
+      lastActivity = Date.now();
+
+      document.getElementById('focusStartBtn').style.display = 'none';
+      document.getElementById('focusStopBtn').style.display = 'inline-block';
+      document.getElementById('focusTaskName').disabled = true;
+      statusEl.textContent = `Session running — "${task}"`;
+
+      focusInterval = setInterval(() => {
+        focusSecondsLeft--;
+        updateRing();
+
+        const idle = Date.now() - lastActivity > IDLE_THRESHOLD_MS;
+        document.getElementById('focusIdleBadge').style.display = idle ? 'inline' : 'none';
+
+        if (focusSecondsLeft <= 0) {
+          focusFinish(focusMinutes);
+        }
+      }, 1000);
+    } catch (e) {
+      statusEl.textContent = 'Could not reach the server.';
+    }
+  };
+
+  async function focusFinish(actualMinutes){
+    clearInterval(focusInterval);
+    focusInterval = null;
+    const token = localStorage.getItem('chotu_token');
+    const statusEl = document.getElementById('focusStatus');
+
+    if (focusSessionId && token) {
+      try {
+        await fetch(`/focus-session/${focusSessionId}/end`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ duration: Math.max(1, actualMinutes) })
+        });
+        statusEl.textContent = 'Session saved.';
+      } catch (e) {
+        statusEl.textContent = 'Session finished, but saving failed — check your connection.';
+      }
+    }
+
+    document.getElementById('focusStartBtn').style.display = 'inline-block';
+    document.getElementById('focusStopBtn').style.display = 'none';
+    document.getElementById('focusTaskName').disabled = false;
+    document.getElementById('focusIdleBadge').style.display = 'none';
+    focusSessionId = null;
+    focusSecondsLeft = focusMinutes * 60;
+    focusTotalSeconds = focusSecondsLeft;
+    updateRing();
+  }
+
+  window.focusStop = function(){
+    const elapsedMinutes = Math.round((Date.now() - focusStartedAt) / 60000);
+    focusFinish(elapsedMinutes);
+  };
+
+  updateRing();
+})();
+</script>
+<!-- ═══ /FOCUS TIMER LOGIC ═══ -->
 
 <!-- ═══ CTRL+K SEARCH WIDGET ═══ -->
 <div id="ckOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,18,32,0.75);backdrop-filter:blur(4px);z-index:9999;align-items:flex-start;justify-content:center;padding-top:12vh;">

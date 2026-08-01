@@ -654,6 +654,9 @@
         <div class="chat-title-sub">AI study assistant</div>
       </div>
       <div class="chat-actions">
+        <select id="modelSelect" style="background:var(--dark,#0E1628);color:var(--text-primary,#F0EDE6);border:1px solid var(--border,rgba(240,237,230,0.14));border-radius:6px;padding:6px 10px;font-size:12px;">
+          <option value="">Loading models…</option>
+        </select>
         <button class="icon-btn" onclick="downloadChat()">⬇️</button>
         <button class="icon-btn" onclick="shareChat()">📤</button>
         <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
@@ -758,6 +761,25 @@
     }
   });
 
+  async function loadModels() {
+    const token = localStorage.getItem('chotu_token');
+    if (!token) return;
+    const sel = document.getElementById('modelSelect');
+    try {
+      const res = await fetch('/models', { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!data.models || !data.models.length) {
+        sel.innerHTML = '<option value="">No models available</option>';
+        return;
+      }
+      sel.innerHTML = data.models.map((m, i) =>
+        `<option value="${m.provider}|${m.model}" ${i===0?'selected':''}>${m.label}</option>`).join('');
+    } catch (e) {
+      sel.innerHTML = '<option value="">No models available</option>';
+    }
+  }
+  loadModels();
+
   async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
@@ -774,6 +796,9 @@
     input.value = '';
     input.style.height = 'auto';
 
+    const sel = document.getElementById('modelSelect');
+    const [provider, model] = (sel && sel.value ? sel.value : 'groq|').split('|');
+
     try {
       const response = await fetch('/chat/ask', {
         method: 'POST',
@@ -781,7 +806,7 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ question: message })
+        body: JSON.stringify({ question: message, provider, model })
       });
 
       if (response.status === 401) {

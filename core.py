@@ -54,6 +54,8 @@ UPLOADS_DIR = '/data/uploads' if os.path.exists('/data') else './uploads'
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
+OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://host.docker.internal:11434')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 MAX_PDF_SIZE = 50 * 1024 * 1024
 MAX_UPLOAD_LIMIT = 100

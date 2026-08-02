@@ -120,6 +120,56 @@ def _call_gemini(prompt):
     resp.raise_for_status()
     return resp.json()['candidates'][0]['content']['parts'][0]['text']
 
+def _build_context(user_id, question, db):
+    memory_rows = db.execute('SELECT fact FROM user_memory WHERE user_id=%s ORDER BY created_at DESC LIMIT 20', (user_id,)).fetchall()
+    memory_facts = [r['fact'] for r in memory_rows] if memory_rows else []
+
+    chunks_data = db.execute('''SELECT dc.chunk_text FROM document_chunks dc
+                               JOIN pdf_documents pd ON dc.document_id = pd.id
+                               WHERE pd.user_id = %s LIMIT 100''', (user_id,)).fetchall()
+    chunks = [row['chunk_text'] for row in chunks_data] if chunks_data else []
+
+    relevant_chunks = []
+    confidence = 0
+    if chunks:
+        results = rag.hybrid_search(question, chunks, top_k=3)
+        relevant_chunks = [r['text'] for r in results]
+        confidence = int(sum(r['confidence'] for r in results) / len(results)) if results else 0
+
+    context = "\n".join(relevant_chunks)
+    if memory_facts:
+        context = "Known facts about this user:\n" + "\n".join(f"- {f}" for f in memory_facts) + "\n\n" + context
+
+    try:
+        params = {'action': 'query', 'format': 'json', 'titles': question.split()[0][:50],
+                 'prop': 'extracts', 'explaintext': True, 'exintro': True}
+        resp = requests.get("https://en.wikipedia.org/w/api.php", params=params, timeout=5)
+        if resp.ok:
+            data = resp.json()
+            for page_data in data['query']['pages'].values():
+                if 'extract' in page_data:
+                    context += "\n" + page_data['extract'][:500]
+                    break
+    except:
+        pass
+
+    return context, chunks, relevant_chunks, confidence
+
+def _dispatch(provider, model_name, prompt):
+    """Returns (answer_or_None, error_message_or_None). Never raises."""
+    try:
+        if provider == 'ollama' and model_name:
+            return _call_ollama(prompt, model_name), None
+        elif provider == 'gemini' and GEMINI_API_KEY:
+            return _call_gemini(prompt), None
+        elif provider == 'groq' and GROQ_API_KEY:
+            return _call_groq(prompt), None
+        else:
+            return None, f"'{provider}' isn't configured on this server."
+    except Exception as e:
+        logger.error(f"{provider} call failed: {e}")
+        return None, str(e)[:200]
+
 @router.post('/chat/ask')
 def chat_ask(req: dict, request: Request):
     try:
@@ -130,55 +180,11 @@ def chat_ask(req: dict, request: Request):
 
         db = get_db()
         try:
-            chunks_data = db.execute('''SELECT dc.chunk_text FROM document_chunks dc
-                                       JOIN pdf_documents pd ON dc.document_id = pd.id
-                                       WHERE pd.user_id = %s LIMIT 100''', (user['id'],)).fetchall()
-
-            chunks = [row['chunk_text'] for row in chunks_data] if chunks_data else []
-
-            relevant_chunks = []
-            confidence = 0
-
-            if chunks:
-                results = rag.hybrid_search(question, chunks, top_k=3)
-                relevant_chunks = [r['text'] for r in results]
-                confidence = int(sum(r['confidence'] for r in results) / len(results)) if results else 0
-
-            context = "\n".join(relevant_chunks)
-
-            try:
-                params = {'action': 'query', 'format': 'json', 'titles': question.split()[0][:50],
-                         'prop': 'extracts', 'explaintext': True, 'exintro': True}
-                resp = requests.get("https://en.wikipedia.org/w/api.php", params=params, timeout=5)
-                wiki = ""
-                if resp.ok:
-                    data = resp.json()
-                    for page_data in data['query']['pages'].values():
-                        if 'extract' in page_data:
-                            wiki = page_data['extract'][:500]
-                            break
-                context += "\n" + wiki
-            except:
-                pass
+            context, chunks, relevant_chunks, confidence = _build_context(user['id'], question, db)
 
             answer = None
-
-            if provider == 'ollama' and model_name:
-                try:
-                    answer = _call_ollama(f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer.", model_name)
-                except Exception as e:
-                    logger.error(f"Ollama call failed: {e}")
-            elif provider == 'gemini' and GEMINI_API_KEY:
-                try:
-                    answer = _call_gemini(f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer.")
-                except Exception as e:
-                    logger.error(f"Gemini call failed: {e}")
-            elif GROQ_API_KEY:
-                try:
-                    prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
-                    answer = _call_groq(prompt)
-                except Exception as e:
-                    logger.error(f"Groq call failed: {e}")
+            prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
+            answer, _err = _dispatch(provider, model_name, prompt)
 
             if answer is None:
                 if provider == 'ollama':
@@ -208,6 +214,52 @@ def chat_ask(req: dict, request: Request):
         raise
     except Exception:
         raise HTTPException(status_code=500, detail='Chat failed')
+
+@router.post('/chat/compare')
+def chat_compare(req: dict, request: Request):
+    """
+    Compare Mode: same question, sent to 2+ models, real latency measured
+    per call. No ranking/consensus/merging — that's a separate, bigger
+    feature. This just shows what each model actually said, side by side.
+    """
+    import time
+    try:
+        user = require_user(request)
+        question = validate_string(req.get('question', ''), 'question', 3, 500)
+        targets = req.get('models', [])
+
+        if not isinstance(targets, list) or not (2 <= len(targets) <= 4):
+            raise HTTPException(status_code=400, detail='Provide 2-4 models to compare')
+
+        db = get_db()
+        try:
+            context, _chunks, _relevant, _confidence = _build_context(user['id'], question, db)
+        finally:
+            db.close()
+
+        prompt = f"You are an AI tutor. Answer this based on context:\n\nContext:\n{context[:2000]}\n\nQuestion: {question}\n\nProvide concise educational answer."
+
+        def run_one(t):
+            provider = t.get('provider', '')
+            model_name = t.get('model', '')
+            label = t.get('label', f'{provider} {model_name}'.strip())
+            t0 = time.monotonic()
+            answer, error = _dispatch(provider, model_name, prompt)
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            return {'provider': provider, 'model': model_name, 'label': label,
+                    'answer': answer, 'error': error, 'latency_ms': latency_ms}
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+            results = list(pool.map(run_one, targets))
+
+        return {'question': question, 'results': results}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail='Compare failed')
 
 @router.get('/chat/history')
 def chat_history(request: Request):

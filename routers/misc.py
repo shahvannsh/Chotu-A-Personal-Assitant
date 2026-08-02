@@ -64,6 +64,12 @@ def search(q: str, request: Request):
                    ORDER BY created_at DESC LIMIT 8''',
                 (user['id'], like, like)).fetchall()
 
+            memories = db.execute(
+                '''SELECT id, fact FROM user_memory
+                   WHERE user_id=%s AND fact ILIKE %s
+                   ORDER BY created_at DESC LIMIT 8''',
+                (user['id'], like)).fetchall()
+
             def snippet(text, length=140):
                 text = (text or '').strip()
                 return text[:length] + ('…' if len(text) > length else '')
@@ -78,6 +84,9 @@ def search(q: str, request: Request):
             for c in chats:
                 results.append({'type': 'chat', 'id': c['id'], 'title': snippet(c['question'], 80),
                                 'snippet': snippet(c['answer']), 'url': '/history.html'})
+            for m in memories:
+                results.append({'type': 'memory', 'id': m['id'], 'title': snippet(m['fact'], 60),
+                                'snippet': 'Saved fact', 'url': '/dashboard.html'})
 
             return {'results': results, 'count': len(results)}
         finally:

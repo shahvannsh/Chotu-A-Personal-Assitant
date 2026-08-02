@@ -505,6 +505,50 @@
         </div>
       </div>
 
+      <!-- MEMORY -->
+      <div class="grid">
+        <div class="card" id="memoryCard">
+          <div class="card-header">
+            <div class="card-title">🧠 Memory</div>
+            <div style="font-size:11px;color:var(--text-secondary);">Short facts Chotu uses in chat answers</div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <input id="memoryInput" type="text" placeholder="e.g. Prepping for GATE, prefers concise answers" maxlength="300"
+                style="flex:1;padding:8px 10px;background:var(--darker,#0B1220);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;"/>
+              <button onclick="memoryAdd()" style="padding:8px 16px;background:var(--primary,#E01020);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:13px;">Save</button>
+            </div>
+            <div id="memoryList" style="display:flex;flex-direction:column;gap:6px;"></div>
+            <div id="memoryStatus" style="font-size:12px;color:var(--text-secondary);margin-top:6px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AMBIENT SOUND PLAYER -->
+      <div class="grid">
+        <div class="card" id="ambientCard">
+          <div class="card-header">
+            <div class="card-title">🔊 Focus Sound</div>
+            <div style="font-size:11px;color:var(--text-secondary);">Generated live in your browser — no files, no streaming</div>
+          </div>
+          <div class="card-body" style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;" id="ambientSounds">
+              <button class="nav-btn ambient-opt active" data-type="none" onclick="ambientSelect('none',this)">🔇 None</button>
+              <button class="nav-btn ambient-opt" data-type="white" onclick="ambientSelect('white',this)">⚪ White Noise</button>
+              <button class="nav-btn ambient-opt" data-type="pink" onclick="ambientSelect('pink',this)">🌸 Pink Noise</button>
+              <button class="nav-btn ambient-opt" data-type="brown" onclick="ambientSelect('brown',this)">🟤 Brown Noise</button>
+              <button class="nav-btn ambient-opt" data-type="rain" onclick="ambientSelect('rain',this)">🌧️ Rain-like</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+              <button id="ambientToggleBtn" onclick="ambientToggle()" style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);cursor:pointer;font-size:12px;" disabled>▶ Play</button>
+              <span style="font-size:11px;color:var(--text-secondary);">Vol</span>
+              <input id="ambientVolume" type="range" min="0" max="100" value="40" oninput="ambientSetVolume(this.value)" style="width:80px;"/>
+            </div>
+          </div>
+          <div style="padding:0 20px 14px;font-size:11px;color:var(--text-secondary);">Auto-plays when you start a Focus Session below, auto-pauses when it ends. Pick "None" to disable.</div>
+        </div>
+      </div>
+
       <!-- FOCUS TIMER -->
       <div class="grid">
         <div class="card" id="focusCard">
@@ -862,6 +906,218 @@ function chotuApplyTheme(key){
 })();
 </script>
 
+<!-- ═══ MEMORY PANEL ═══ -->
+<script>
+(function(){
+  async function authFetch(url, opts){
+    const token = localStorage.getItem('chotu_token');
+    opts = opts || {};
+    opts.headers = Object.assign({'Authorization': `Bearer ${token}`}, opts.headers || {});
+    return fetch(url, opts);
+  }
+
+  function escapeHtmlMem(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  window.memoryLoad = async function(){
+    const listEl = document.getElementById('memoryList');
+    try {
+      const res = await authFetch('/memory');
+      if (!res.ok) { listEl.innerHTML = ''; return; }
+      const data = await res.json();
+      if (!data.facts.length) {
+        listEl.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);">No saved facts yet.</div>';
+        return;
+      }
+      listEl.innerHTML = data.facts.map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:13px;">
+          <span>${escapeHtmlMem(f.fact)}</span>
+          <button onclick="memoryDelete(${f.id})" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:14px;">✕</button>
+        </div>`).join('');
+    } catch(e) {
+      listEl.innerHTML = '';
+    }
+  };
+
+  window.memoryAdd = async function(){
+    const input = document.getElementById('memoryInput');
+    const statusEl = document.getElementById('memoryStatus');
+    const fact = input.value.trim();
+    if (!fact) return;
+    try {
+      const res = await authFetch('/memory', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fact})
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        statusEl.textContent = err.detail || 'Could not save.';
+        return;
+      }
+      input.value = '';
+      statusEl.textContent = '';
+      memoryLoad();
+    } catch(e) {
+      statusEl.textContent = 'Could not reach the server.';
+    }
+  };
+
+  window.memoryDelete = async function(id){
+    try {
+      await authFetch(`/memory/${id}`, {method: 'DELETE'});
+      memoryLoad();
+    } catch(e) {}
+  };
+
+  document.getElementById('memoryInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); memoryAdd(); }
+  });
+
+  memoryLoad();
+})();
+</script>
+<!-- ═══ /MEMORY PANEL ═══ -->
+
+<!-- ═══ AMBIENT SOUND GENERATOR (Web Audio API, no files) ═══ -->
+<script>
+(function(){
+  let audioCtx = null;
+  let sourceNode = null;
+  let gainNode = null;
+  let lfoNode = null; // for rain-like amplitude wobble
+  let currentType = 'none';
+  let isPlaying = false;
+  const bufferCache = {};
+
+  function ensureCtx(){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function makeNoiseBuffer(type){
+    if (bufferCache[type]) return bufferCache[type];
+    const ctx = ensureCtx();
+    const seconds = 6;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    if (type === 'white') {
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+    } else if (type === 'brown') {
+      let last = 0;
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        last = (last + 0.02 * white) / 1.02;
+        data[i] = last * 3.2; // renormalize, brown noise drifts quiet otherwise
+      }
+    } else if (type === 'pink' || type === 'rain') {
+      // Paul Kellet's pink noise approximation
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886*b0 + white*0.0555179;
+        b1 = 0.99332*b1 + white*0.0750759;
+        b2 = 0.96900*b2 + white*0.1538520;
+        b3 = 0.86650*b3 + white*0.3104856;
+        b4 = 0.55000*b4 + white*0.5329522;
+        b5 = -0.7616*b5 - white*0.0168980;
+        const pink = b0+b1+b2+b3+b4+b5+b6+white*0.5362;
+        b6 = white*0.115926;
+        data[i] = pink * 0.11;
+      }
+    }
+    bufferCache[type] = buffer;
+    return buffer;
+  }
+
+  function stopInternal(){
+    if (sourceNode) { try { sourceNode.stop(); } catch(e){} sourceNode.disconnect(); sourceNode = null; }
+    if (lfoNode) { try { lfoNode.stop(); } catch(e){} lfoNode.disconnect(); lfoNode = null; }
+    isPlaying = false;
+    updateToggleBtn();
+  }
+
+  function startInternal(){
+    if (currentType === 'none') return;
+    const ctx = ensureCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    stopInternal();
+
+    const buffer = makeNoiseBuffer(currentType === 'rain' ? 'pink' : currentType);
+    sourceNode = ctx.createBufferSource();
+    sourceNode.buffer = buffer;
+    sourceNode.loop = true;
+
+    if (!gainNode) {
+      gainNode = ctx.createGain();
+      gainNode.connect(ctx.destination);
+    }
+    gainNode.gain.value = document.getElementById('ambientVolume').value / 100;
+
+    if (currentType === 'rain') {
+      // filter down + slow volume wobble to feel more like rain than raw pink noise
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 2200;
+      sourceNode.connect(filter);
+      filter.connect(gainNode);
+
+      lfoNode = ctx.createOscillator();
+      lfoNode.frequency.value = 0.15;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.08;
+      lfoNode.connect(lfoGain);
+      lfoGain.connect(gainNode.gain);
+      lfoNode.start();
+    } else {
+      sourceNode.connect(gainNode);
+    }
+
+    sourceNode.start();
+    isPlaying = true;
+    updateToggleBtn();
+  }
+
+  function updateToggleBtn(){
+    const btn = document.getElementById('ambientToggleBtn');
+    if (!btn) return;
+    btn.disabled = currentType === 'none';
+    btn.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+  }
+
+  window.ambientSelect = function(type, btnEl){
+    currentType = type;
+    document.querySelectorAll('.ambient-opt').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    if (type === 'none') { stopInternal(); return; }
+    if (isPlaying) startInternal(); // switch live if already playing
+    else updateToggleBtn();
+  };
+
+  window.ambientToggle = function(){
+    if (currentType === 'none') return;
+    if (isPlaying) stopInternal(); else startInternal();
+  };
+
+  window.ambientSetVolume = function(v){
+    if (gainNode) gainNode.gain.value = v / 100;
+  };
+
+  // Called by the focus timer — auto-plays only if user picked a sound and it's not already going.
+  window.ambientAutoPlayForFocus = function(){
+    if (currentType !== 'none' && !isPlaying) startInternal();
+  };
+  window.ambientAutoPauseForFocus = function(){
+    if (isPlaying) stopInternal();
+  };
+})();
+</script>
+<!-- ═══ /AMBIENT SOUND GENERATOR ═══ -->
+
 <!-- ═══ FOCUS TIMER LOGIC ═══ -->
 <script>
 (function(){
@@ -927,6 +1183,7 @@ function chotuApplyTheme(key){
       document.getElementById('focusStopBtn').style.display = 'inline-block';
       document.getElementById('focusTaskName').disabled = true;
       statusEl.textContent = `Session running — "${task}"`;
+      if (window.ambientAutoPlayForFocus) window.ambientAutoPlayForFocus();
 
       focusInterval = setInterval(() => {
         focusSecondsLeft--;
@@ -947,6 +1204,7 @@ function chotuApplyTheme(key){
   async function focusFinish(actualMinutes){
     clearInterval(focusInterval);
     focusInterval = null;
+    if (window.ambientAutoPauseForFocus) window.ambientAutoPauseForFocus();
     const token = localStorage.getItem('chotu_token');
     const statusEl = document.getElementById('focusStatus');
 

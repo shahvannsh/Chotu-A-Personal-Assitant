@@ -657,10 +657,18 @@
         <select id="modelSelect" style="background:var(--dark,#0E1628);color:var(--text-primary,#F0EDE6);border:1px solid var(--border,rgba(240,237,230,0.14));border-radius:6px;padding:6px 10px;font-size:12px;">
           <option value="">Loading models…</option>
         </select>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-primary,#F0EDE6);cursor:pointer;">
+          <input type="checkbox" id="compareModeToggle" onchange="toggleCompareMode()"/> Compare
+        </label>
         <button class="icon-btn" onclick="downloadChat()">⬇️</button>
         <button class="icon-btn" onclick="shareChat()">📤</button>
         <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
       </div>
+    </div>
+
+    <div id="comparePicker" style="display:none;padding:10px 16px;border-bottom:1px solid var(--border,rgba(240,237,230,0.14));font-size:12px;">
+      <div style="color:var(--text-secondary,rgba(240,237,230,0.5));margin-bottom:6px;">Pick 2-4 models to compare:</div>
+      <div id="comparePickerList" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
     </div>
 
     <!-- MESSAGES -->
@@ -761,6 +769,8 @@
     }
   });
 
+  let availableModels = [];
+
   async function loadModels() {
     const token = localStorage.getItem('chotu_token');
     if (!token) return;
@@ -768,17 +778,31 @@
     try {
       const res = await fetch('/models', { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
-      if (!data.models || !data.models.length) {
+      availableModels = data.models || [];
+      if (!availableModels.length) {
         sel.innerHTML = '<option value="">No models available</option>';
         return;
       }
-      sel.innerHTML = data.models.map((m, i) =>
+      sel.innerHTML = availableModels.map((m, i) =>
         `<option value="${m.provider}|${m.model}" ${i===0?'selected':''}>${m.label}</option>`).join('');
+
+      const listEl = document.getElementById('comparePickerList');
+      listEl.innerHTML = availableModels.map((m, i) => `
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" class="compare-check" value="${m.provider}|${m.model}|${m.label}" ${i<2?'checked':''}/>
+          ${escapeHtml(m.label)}
+        </label>`).join('');
     } catch (e) {
       sel.innerHTML = '<option value="">No models available</option>';
     }
   }
   loadModels();
+
+  window.toggleCompareMode = function(){
+    const on = document.getElementById('compareModeToggle').checked;
+    document.getElementById('comparePicker').style.display = on ? 'block' : 'none';
+    document.getElementById('modelSelect').style.display = on ? 'none' : 'inline-block';
+  };
 
   async function sendMessage() {
     const input = document.getElementById('messageInput');
@@ -795,6 +819,12 @@
     addMessage(message, 'user');
     input.value = '';
     input.style.height = 'auto';
+
+    const compareOn = document.getElementById('compareModeToggle').checked;
+    if (compareOn) {
+      await sendCompare(message, token);
+      return;
+    }
 
     const sel = document.getElementById('modelSelect');
     const [provider, model] = (sel && sel.value ? sel.value : 'groq|').split('|');
@@ -824,6 +854,69 @@
       addMessage(data.answer, 'ai');
     } catch (err) {
       addMessage(`⚠️ Failed to reach Chotu: ${err.message}`, 'ai');
+    }
+  }
+
+  async function sendCompare(message, token) {
+    const checks = [...document.querySelectorAll('.compare-check:checked')];
+    if (checks.length < 2) {
+      addMessage('⚠️ Pick at least 2 models to compare.', 'ai');
+      return;
+    }
+    if (checks.length > 4) {
+      addMessage('⚠️ Pick at most 4 models to compare.', 'ai');
+      return;
+    }
+    const models = checks.map(c => {
+      const [provider, model, label] = c.value.split('|');
+      return { provider, model, label };
+    });
+
+    const messagesDiv = document.getElementById('messagesContainer');
+    const loadingId = 'compare-loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.style.cssText = 'padding:10px 16px;color:var(--text-secondary,rgba(240,237,230,0.5));font-size:13px;';
+    loadingDiv.textContent = `Asking ${models.length} models…`;
+    messagesDiv.appendChild(loadingDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    try {
+      const response = await fetch('/chat/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ question: message, models })
+      });
+      document.getElementById(loadingId)?.remove();
+
+      if (response.status === 401) {
+        localStorage.removeItem('chotu_token');
+        window.location.href = '/login.html';
+        return;
+      }
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:8px 16px 16px;';
+      grid.innerHTML = data.results.map(r => `
+        <div style="border:1px solid var(--border,rgba(240,237,230,0.14));border-radius:8px;padding:12px;background:rgba(255,255,255,0.02);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-weight:600;font-size:12px;">${escapeHtml(r.label)}</span>
+            <span style="font-size:11px;color:var(--text-secondary,rgba(240,237,230,0.5));">${r.latency_ms}ms</span>
+          </div>
+          <div style="font-size:13px;white-space:pre-wrap;color:${r.error ? '#ffa500' : 'var(--text-primary,#F0EDE6)'};">
+            ${escapeHtml(r.error ? `Failed: ${r.error}` : (r.answer || '(empty response)'))}
+          </div>
+        </div>`).join('');
+      messagesDiv.appendChild(grid);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    } catch (err) {
+      document.getElementById(loadingId)?.remove();
+      addMessage(`⚠️ Compare failed: ${err.message}`, 'ai');
     }
   }
 

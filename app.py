@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from core import ALLOWED_ORIGINS, init_db
-from routers import pages, auth, exams, notes, focus, study, misc
+from routers import pages, auth, exams, notes, focus, study, misc, memory
 
 app = FastAPI(title="CHOTU v2.0", version="2.0.1")
 
@@ -29,6 +29,7 @@ app.include_router(notes.router)
 app.include_router(focus.router)
 app.include_router(study.router)
 app.include_router(misc.router)
+app.include_router(memory.router)
 
 
 @app.on_event("startup")

@@ -400,6 +400,14 @@ def init_db():
             created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS user_memory (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            fact TEXT NOT NULL,
+            created_at TEXT DEFAULT (to_char(CURRENT_TIMESTAMP, 'YYYY-MM-DD"T"HH24:MI:SS.US')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
         """)
         # Migration for pre-existing databases created before password_hash existed.
         db.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
